@@ -77,7 +77,13 @@ class ModelPolicy:
         started = time.monotonic()
         self.plan_generation = {"status": "running", "attempts": [], "latency_seconds": 0}
         context = {"query": query.strip(), "budget": budget.model_dump(),
-                   "max_tasks": min(6, capacity // 2)}
+                   "max_tasks": min(6, capacity // 2),
+                   "max_task_count_plus_target_sources": capacity,
+                   "constraints": {
+                       "query": "Copy the input query exactly without paraphrasing.",
+                       "budget": "len(tasks) + sum(task.target_sources) <= capacity",
+                       "capacity": capacity,
+                   }}
         instruction = (
             "Decompose the research question into a small actionable task DAG. Copy query exactly. "
             "Use unique task IDs and globally unique focused search queries; no cycles or unknown "
@@ -87,20 +93,35 @@ class ModelPolicy:
         )
         try:
             for attempt in range(2):
+                diagnosis = {"reason": "structured_output_or_schema_error"}
                 try:
                     plan = self._invoke(Plan, instruction, context, phase="planning")
+                    task_count = len(plan.tasks)
+                    source_targets = sum(t.target_sources for t in plan.tasks)
+                    diagnosis = {"query_matches": plan.query == query.strip(),
+                                 "task_count": task_count, "max_tasks": context["max_tasks"],
+                                 "target_sources_total": source_targets,
+                                 "estimated_tool_calls": task_count + source_targets,
+                                 "capacity": capacity}
                     if plan.query != query.strip():
+                        diagnosis["reason"] = "query_mismatch"
                         raise ValueError("query_mismatch")
-                    if (len(plan.tasks) > context["max_tasks"] or
-                            len(plan.tasks) + sum(t.target_sources for t in plan.tasks) > capacity):
+                    if (task_count > context["max_tasks"] or
+                            task_count + source_targets > capacity):
+                        diagnosis["reason"] = "plan_exceeds_budget"
                         raise ValueError("plan_exceeds_budget")
                 except ValueError:
                     self.plan_generation["attempts"].append({"attempt": attempt + 1,
-                                                             "status": "invalid_plan"})
-                    context["feedback"] = (
-                        "Previous plan failed validation. Recheck query, DAG, unique queries, "
-                        "max_tasks and the task-count plus target-source budget constraint."
-                    )
+                                                             "status": "invalid_plan",
+                                                             **diagnosis})
+                    context["feedback"] = {
+                        **diagnosis,
+                        "instruction": (
+                            "Regenerate a valid plan. Copy query exactly. Use at most max_tasks "
+                            "tasks and set target_sources=1 to fit the budget. "
+                            "Keep IDs and queries unique and dependencies acyclic."
+                        ),
+                    }
                     if attempt == 1:
                         raise ValueError("Automatic planning failed after two attempts") from None
                 else:

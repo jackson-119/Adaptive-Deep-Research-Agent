@@ -100,6 +100,11 @@ def main():
             (directory / "failure.json").write_text(
                 json.dumps(failure, ensure_ascii=False, indent=2), encoding="utf-8")
             print(f"Failure record: {directory / 'failure.json'}")
+            generation = failure.get("plan_generation") or {}
+            if generation.get("status") == "failed":
+                for attempt in generation.get("attempts", []):
+                    reason = attempt.get("reason", "unknown")
+                    print(f"Planning attempt {attempt['attempt']}: {reason}")
         parser.exit(1, f"Research failed ({type(exc).__name__}). Check configuration and inputs.\n")
     print(f"Report: {directory / 'report.md'}")
     print(json.dumps(result["metrics"], ensure_ascii=False, indent=2))

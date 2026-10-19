@@ -165,3 +165,32 @@ def test_cli_preserves_plan_when_writer_fails(monkeypatch, tmp_path):
     assert failure['model_call_records'][-1]['phase'] == 'writing'
     assert not failure['token_usage_complete']
     assert 'private provider' not in text
+
+
+@pytest.mark.parametrize('kind', ['query_mismatch', 'plan_exceeds_budget'])
+def test_plan_diagnostics_and_targeted_feedback(kind):
+    bad = plan('wrong' if kind == 'query_mismatch' else 'question')
+    if kind == 'plan_exceeds_budget':
+        bad['tasks'][0]['target_sources'] = 2
+    model = Model([bad, plan()])
+    policy = ModelPolicy(model)
+    policy.generate_plan('question', Budget(tool_calls=2))
+    attempt = policy.plan_generation['attempts'][0]
+    assert attempt['reason'] == kind
+    assert attempt['capacity'] == 2
+    assert attempt['task_count'] == 1
+    feedback = json.loads(model.messages[1][1][1])['feedback']
+    assert feedback['reason'] == kind
+    if kind == 'plan_exceeds_budget':
+        assert feedback['estimated_tool_calls'] == 3
+    else:
+        assert not feedback['query_matches']
+
+
+def test_schema_error_diagnostic_does_not_echo_model_output():
+    bad = plan()
+    bad['private_key'] = 'sensitive-model-text'
+    policy = ModelPolicy(Model([bad, plan()]))
+    policy.generate_plan('question', Budget())
+    assert policy.plan_generation['attempts'][0]['reason'] == 'structured_output_or_schema_error'
+    assert 'sensitive-model-text' not in json.dumps(policy.plan_generation)
