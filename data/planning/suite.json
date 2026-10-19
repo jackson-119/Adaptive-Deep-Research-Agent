@@ -1,0 +1,275 @@
+[
+  {
+    "id": "budget_tradeoff",
+    "plan": {
+      "query": "合成规划演示：budget_tradeoff",
+      "tasks": [
+        {
+          "id": "broad",
+          "description": "合成任务 broad",
+          "queries": [
+            "broad"
+          ],
+          "dependencies": [],
+          "target_sources": 2
+        },
+        {
+          "id": "focused",
+          "description": "合成任务 focused",
+          "queries": [
+            "focused"
+          ],
+          "dependencies": [],
+          "target_sources": 1
+        },
+        {
+          "id": "detail",
+          "description": "合成任务 detail",
+          "queries": [
+            "detail"
+          ],
+          "dependencies": [],
+          "target_sources": 1
+        }
+      ]
+    },
+    "snapshot": {
+      "query": "合成规划演示：budget_tradeoff",
+      "searches": {
+        "broad": [
+          {
+            "url": "https://example.org/b1",
+            "title": "b1",
+            "content": "合成摘要 b1"
+          },
+          {
+            "url": "https://example.org/b2",
+            "title": "b2",
+            "content": "合成摘要 b2"
+          }
+        ],
+        "focused": [
+          {
+            "url": "https://example.org/f",
+            "title": "f",
+            "content": "合成摘要 f"
+          }
+        ],
+        "detail": [
+          {
+            "url": "https://example.org/d",
+            "title": "d",
+            "content": "合成摘要 d"
+          }
+        ]
+      },
+      "pages": {
+        "https://example.org/b1": "合成正文 b1",
+        "https://example.org/b2": "合成正文 b2",
+        "https://example.org/f": "合成正文 f",
+        "https://example.org/d": "合成正文 d"
+      }
+    },
+    "budget": {
+      "tool_calls": 4,
+      "steps": 12
+    }
+  },
+  {
+    "id": "dependency",
+    "plan": {
+      "query": "合成规划演示：dependency",
+      "tasks": [
+        {
+          "id": "dependent",
+          "description": "合成任务 dependent",
+          "queries": [
+            "dependent"
+          ],
+          "dependencies": [
+            "foundation"
+          ],
+          "target_sources": 1
+        },
+        {
+          "id": "foundation",
+          "description": "合成任务 foundation",
+          "queries": [
+            "foundation"
+          ],
+          "dependencies": [],
+          "target_sources": 1
+        }
+      ]
+    },
+    "snapshot": {
+      "query": "合成规划演示：dependency",
+      "searches": {
+        "dependent": [
+          {
+            "url": "https://example.org/dep",
+            "title": "dep",
+            "content": "合成摘要 dep"
+          }
+        ],
+        "foundation": [
+          {
+            "url": "https://example.org/base",
+            "title": "base",
+            "content": "合成摘要 base"
+          }
+        ]
+      },
+      "pages": {
+        "https://example.org/dep": "合成后续正文",
+        "https://example.org/base": "合成基础正文"
+      }
+    },
+    "budget": {
+      "tool_calls": 6,
+      "steps": 12
+    }
+  },
+  {
+    "id": "empty_fallback",
+    "plan": {
+      "query": "合成规划演示：empty_fallback",
+      "tasks": [
+        {
+          "id": "retry",
+          "description": "合成任务 retry",
+          "queries": [
+            "empty",
+            "fallback"
+          ],
+          "dependencies": [],
+          "target_sources": 1
+        }
+      ]
+    },
+    "snapshot": {
+      "query": "合成规划演示：empty_fallback",
+      "searches": {
+        "empty": [],
+        "fallback": [
+          {
+            "url": "https://example.org/fallback",
+            "title": "fallback",
+            "content": "合成摘要 fallback"
+          }
+        ]
+      },
+      "pages": {
+        "https://example.org/fallback": "合成备选正文"
+      }
+    },
+    "budget": {
+      "tool_calls": 4,
+      "steps": 12
+    }
+  },
+  {
+    "id": "failed_read",
+    "plan": {
+      "query": "合成规划演示：failed_read",
+      "tasks": [
+        {
+          "id": "missing",
+          "description": "合成任务 missing",
+          "queries": [
+            "missing"
+          ],
+          "dependencies": [],
+          "target_sources": 1
+        },
+        {
+          "id": "working",
+          "description": "合成任务 working",
+          "queries": [
+            "working"
+          ],
+          "dependencies": [],
+          "target_sources": 1
+        }
+      ]
+    },
+    "snapshot": {
+      "query": "合成规划演示：failed_read",
+      "searches": {
+        "missing": [
+          {
+            "url": "https://example.org/missing",
+            "title": "missing",
+            "content": "合成摘要 missing"
+          }
+        ],
+        "working": [
+          {
+            "url": "https://example.org/ok",
+            "title": "ok",
+            "content": "合成摘要 ok"
+          }
+        ]
+      },
+      "pages": {
+        "https://example.org/ok": "合成可用正文"
+      }
+    },
+    "budget": {
+      "tool_calls": 5,
+      "steps": 12
+    }
+  },
+  {
+    "id": "shared_source",
+    "plan": {
+      "query": "合成规划演示：shared_source",
+      "tasks": [
+        {
+          "id": "one",
+          "description": "合成任务 one",
+          "queries": [
+            "one"
+          ],
+          "dependencies": [],
+          "target_sources": 1
+        },
+        {
+          "id": "two",
+          "description": "合成任务 two",
+          "queries": [
+            "two"
+          ],
+          "dependencies": [],
+          "target_sources": 1
+        }
+      ]
+    },
+    "snapshot": {
+      "query": "合成规划演示：shared_source",
+      "searches": {
+        "one": [
+          {
+            "url": "https://example.org/shared",
+            "title": "shared",
+            "content": "合成摘要 shared"
+          }
+        ],
+        "two": [
+          {
+            "url": "https://example.org/shared",
+            "title": "shared",
+            "content": "合成摘要 shared"
+          }
+        ]
+      },
+      "pages": {
+        "https://example.org/shared": "合成共享正文"
+      }
+    },
+    "budget": {
+      "tool_calls": 5,
+      "steps": 12
+    }
+  }
+]

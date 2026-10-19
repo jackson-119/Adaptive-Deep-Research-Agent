@@ -1,0 +1,32 @@
+{
+  "query": "合成规划演示：budget_tradeoff",
+  "tasks": [
+    {
+      "id": "broad",
+      "description": "合成任务 broad",
+      "queries": [
+        "broad"
+      ],
+      "dependencies": [],
+      "target_sources": 2
+    },
+    {
+      "id": "focused",
+      "description": "合成任务 focused",
+      "queries": [
+        "focused"
+      ],
+      "dependencies": [],
+      "target_sources": 1
+    },
+    {
+      "id": "detail",
+      "description": "合成任务 detail",
+      "queries": [
+        "detail"
+      ],
+      "dependencies": [],
+      "target_sources": 1
+    }
+  ]
+}

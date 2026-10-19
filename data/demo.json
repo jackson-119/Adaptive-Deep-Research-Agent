@@ -1,0 +1,13 @@
+{
+  "query": "演示：比较 Alpha 和 Beta 研究策略",
+  "searches": {
+    "演示：比较 Alpha 和 Beta 研究策略": [
+      {"title": "Alpha 合成说明", "url": "https://example.org/alpha", "content": "合成示例：Alpha 使用固定搜索计划。"},
+      {"title": "Beta 合成说明", "url": "https://example.org/beta", "content": "合成示例：Beta 根据证据调整查询。"}
+    ]
+  },
+  "pages": {
+    "https://example.org/alpha": "合成示例：Alpha 使用固定搜索计划，便于复现，但不响应新证据。",
+    "https://example.org/beta": "合成示例：Beta 根据新证据调整查询，需要额外决策开销。"
+  }
+}

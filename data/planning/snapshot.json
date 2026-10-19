@@ -1,0 +1,37 @@
+{
+  "query": "合成规划演示：budget_tradeoff",
+  "searches": {
+    "broad": [
+      {
+        "url": "https://example.org/b1",
+        "title": "b1",
+        "content": "合成摘要 b1"
+      },
+      {
+        "url": "https://example.org/b2",
+        "title": "b2",
+        "content": "合成摘要 b2"
+      }
+    ],
+    "focused": [
+      {
+        "url": "https://example.org/f",
+        "title": "f",
+        "content": "合成摘要 f"
+      }
+    ],
+    "detail": [
+      {
+        "url": "https://example.org/d",
+        "title": "d",
+        "content": "合成摘要 d"
+      }
+    ]
+  },
+  "pages": {
+    "https://example.org/b1": "合成正文 b1",
+    "https://example.org/b2": "合成正文 b2",
+    "https://example.org/f": "合成正文 f",
+    "https://example.org/d": "合成正文 d"
+  }
+}
