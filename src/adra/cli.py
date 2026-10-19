@@ -10,6 +10,9 @@ from adra.policy import DemoPolicy, ModelPolicy
 from adra.planning import Plan, PlanningPolicy
 from adra.state import Budget
 from adra.tools import SnapshotTools, TavilyTools
+from adra.domains import DomainPolicy
+from adra.provenance import runtime_provenance
+from adra.coverage import ReplayAssessor
 
 
 def save(result: dict, directory: Path) -> None:
@@ -30,6 +33,9 @@ def save(result: dict, directory: Path) -> None:
     if "plan" in result:
         (directory / "plan.json").write_text(
             json.dumps(result["plan"], ensure_ascii=False, indent=2), encoding="utf-8")
+    if result.get("coverage"):
+        (directory / "coverage.json").write_text(
+            json.dumps(result["coverage"], ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def main():
@@ -39,15 +45,30 @@ def main():
     parser.add_argument("--max-tools", type=int, default=6)
     parser.add_argument("--max-steps", type=int, default=10)
     parser.add_argument("--output", type=Path, default=Path("outputs"))
+    parser.add_argument("--allowed-domain", action="append", default=[],
+                        help="Allowed exact source hostname; repeat for multiple hosts")
     parser.add_argument("--strategy", choices=["baseline", "static", "adaptive"], default="baseline")
+    parser.add_argument("--coverage-mode", choices=["sources", "semantic"], default="sources")
+    parser.add_argument("--coverage-replay", type=Path,
+                        help="Offline assessment map keyed by exact input hash")
     plans = parser.add_mutually_exclusive_group()
     plans.add_argument("--plan", type=Path, help="Validated task DAG in JSON")
     plans.add_argument("--auto-plan", action="store_true", help="Generate a task DAG online")
     args = parser.parse_args()
+    try:
+        allowed_domains = DomainPolicy(args.allowed_domain).domains
+    except ValueError as exc:
+        parser.error(str(exc))
     policy = None
     directory = None
     try:
         budget = Budget(tool_calls=args.max_tools, steps=args.max_steps)
+        if args.coverage_mode == "semantic" and args.strategy == "baseline":
+            parser.error("Semantic coverage requires static/adaptive planning")
+        if args.coverage_replay and (not args.snapshot or args.coverage_mode != "semantic"):
+            parser.error("--coverage-replay requires snapshot mode and semantic coverage")
+        if args.snapshot and args.coverage_mode == "semantic" and not args.coverage_replay:
+            parser.error("Offline semantic coverage requires --coverage-replay")
         if (args.strategy == "baseline") != (not (args.plan or args.auto_plan)):
             parser.error("static/adaptive require --plan or --auto-plan; baseline accepts neither")
         if args.auto_plan and (args.snapshot or min(budget.tool_calls, budget.steps) < 2):
@@ -69,19 +90,21 @@ def main():
             from langchain.chat_models import init_chat_model
             model = init_chat_model(model_name, temperature=0, max_tokens=2048,
                                     timeout=60, max_retries=0)
-            policy, tools = ModelPolicy(model), TavilyTools(key)
+            policy, tools = ModelPolicy(model), TavilyTools(key, allowed_domains)
             mode = "live"
         if not query.strip():
             parser.error("Research query must not be empty")
         run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:8]
         directory = args.output / run_id
         if args.auto_plan:
-            plan = policy.generate_plan(query, budget)
+            plan = policy.generate_plan(query, budget, semantic_coverage=args.coverage_mode == "semantic")
         if plan:
             if query.strip() != plan.query.strip():
                 parser.error("Plan query must match the research query")
-            policy = PlanningPolicy(plan, policy, args.strategy)
-        result = run(query, policy, tools, budget, task_id=run_id)
+            assessor = (ReplayAssessor(json.loads(args.coverage_replay.read_text(encoding="utf-8")))
+                        if args.coverage_replay else None)
+            policy = PlanningPolicy(plan, policy, args.strategy, args.coverage_mode, assessor)
+        result = run(query, policy, tools, budget, task_id=run_id, allowed_domains=allowed_domains)
         result["mode"] = mode
         result["strategy"] = args.strategy
         result["model"] = os.environ.get("ADRA_MODEL") if mode == "live" else None
@@ -91,6 +114,8 @@ def main():
         if args.auto_plan and directory is not None:
             directory.mkdir(parents=True, exist_ok=True)
             failure = {"status": "failed", "error_type": type(exc).__name__,
+                       "allowed_domains": list(allowed_domains),
+                       "provenance": runtime_provenance(),
                        "plan_generation": getattr(policy, "plan_generation", None),
                        "model_call_records": getattr(policy, "call_records", []),
                        "total_tokens": getattr(policy, "tokens", None),

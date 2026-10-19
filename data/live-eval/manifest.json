@@ -1,0 +1,39 @@
+[
+  {
+    "id": "langgraph-state-routing",
+    "plan": "data/live-eval/langgraph-state-routing.json",
+    "allowed_domains": [
+      "docs.langchain.com",
+      "reference.langchain.com"
+    ]
+  },
+  {
+    "id": "langgraph-persistence",
+    "plan": "data/live-eval/langgraph-persistence.json",
+    "allowed_domains": [
+      "docs.langchain.com",
+      "reference.langchain.com"
+    ]
+  },
+  {
+    "id": "python-asyncio",
+    "plan": "data/live-eval/python-asyncio.json",
+    "allowed_domains": [
+      "docs.python.org"
+    ]
+  },
+  {
+    "id": "pydantic-validation",
+    "plan": "data/live-eval/pydantic-validation.json",
+    "allowed_domains": [
+      "docs.pydantic.dev"
+    ]
+  },
+  {
+    "id": "httpx-timeouts",
+    "plan": "data/live-eval/httpx-timeouts.json",
+    "allowed_domains": [
+      "www.python-httpx.org"
+    ]
+  }
+]

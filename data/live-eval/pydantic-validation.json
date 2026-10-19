@@ -1,0 +1,47 @@
+{
+  "query": "根据 Pydantic v2 官方文档，说明 strict 模式与 extra 配置分别控制什么，并解释两者的区别",
+  "tasks": [
+    {
+      "id": "strict",
+      "description": "解释 strict 模式及 Python/JSON 输入差异",
+      "queries": [
+        "Pydantic v2 official strict mode Python JSON validation",
+        "Pydantic strict mode date JSON input conversion"
+      ],
+      "dependencies": [],
+      "target_sources": 1,
+      "priority": 1.0,
+      "criteria": [
+        {
+          "id": "coercion",
+          "description": "说明 strict 模式如何影响类型转换"
+        },
+        {
+          "id": "json",
+          "description": "举出官方文档中严格模式对 Python 与 JSON 输入处理不同的情况"
+        }
+      ]
+    },
+    {
+      "id": "extra",
+      "description": "解释额外字段策略与 strict 的区别",
+      "queries": [
+        "Pydantic v2 official ConfigDict extra ignore forbid allow",
+        "Pydantic v2 model config strict extra"
+      ],
+      "dependencies": [],
+      "target_sources": 1,
+      "priority": 1.0,
+      "criteria": [
+        {
+          "id": "modes",
+          "description": "说明 extra 的 ignore、forbid、allow 三种行为"
+        },
+        {
+          "id": "distinction",
+          "description": "说明额外字段控制与字段值类型转换控制是不同维度"
+        }
+      ]
+    }
+  ]
+}

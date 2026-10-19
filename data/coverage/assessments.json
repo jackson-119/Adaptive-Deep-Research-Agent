@@ -1,0 +1,49 @@
+{
+  "da9c05a4e029b61b9f21bd11f1e33e6c60fe0472150dfda58291b15df85afc5a": {
+    "judgments": [
+      {
+        "criterion_id": "schema",
+        "status": "supported",
+        "citations": [
+          {
+            "evidence_id": "E1",
+            "quote": "State schema defines fields for node updates."
+          }
+        ],
+        "reason": "Synthetic manually annotated example."
+      },
+      {
+        "criterion_id": "persistence",
+        "status": "missing",
+        "citations": [],
+        "reason": "Synthetic manually annotated example."
+      }
+    ]
+  },
+  "2ef7dcad47d9b2fc9b9dfb73189cd5feb8b4b0386a0f831d0c1d190e1b7c5dcc": {
+    "judgments": [
+      {
+        "criterion_id": "schema",
+        "status": "supported",
+        "citations": [
+          {
+            "evidence_id": "E1",
+            "quote": "State schema defines fields for node updates."
+          }
+        ],
+        "reason": "Synthetic manually annotated example."
+      },
+      {
+        "criterion_id": "persistence",
+        "status": "supported",
+        "citations": [
+          {
+            "evidence_id": "E2",
+            "quote": "A checkpointer saves state; thread_id selects the conversation."
+          }
+        ],
+        "reason": "Synthetic manually annotated example."
+      }
+    ]
+  }
+}

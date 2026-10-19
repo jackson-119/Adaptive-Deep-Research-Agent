@@ -24,6 +24,14 @@ class Evidence(BaseModel):
     content: str
     read: bool = False
     task_ids: list[str] = Field(default_factory=list)
+    original_length: int = 0
+    selected_length: int = 0
+    truncated: bool = False
+    raw_sha256: str = ""
+    raw_kind: Literal["search", "read"] = "search"
+    selection_method: str = ""
+    selection_focus: list[dict] = Field(default_factory=list)
+    passages: list[dict] = Field(default_factory=list)
 
 
 class Claim(BaseModel):
@@ -52,3 +60,6 @@ class AgentState(TypedDict):
     stop_reason: str
     report: dict
     planning: dict
+    allowed_domains: list[str]
+    raw_documents: dict[str, dict[str, str]]
+    coverage: dict

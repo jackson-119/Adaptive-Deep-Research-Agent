@@ -1,0 +1,47 @@
+{
+  "query": "根据 HTTPX 官方文档，解释超时类型、连接池限制，以及它们与端到端总时限的区别",
+  "tasks": [
+    {
+      "id": "timeout",
+      "description": "解释 HTTPX 四种超时及其与请求总时限的区别",
+      "queries": [
+        "HTTPX official advanced timeouts connect read write pool timeout",
+        "HTTPX timeout network inactivity read timeout chunks"
+      ],
+      "dependencies": [],
+      "target_sources": 1,
+      "priority": 1.0,
+      "criteria": [
+        {
+          "id": "types",
+          "description": "说明 connect、read、write、pool 四种超时各自约束什么"
+        },
+        {
+          "id": "total",
+          "description": "说明这些阶段或等待超时为何不能直接等同于端到端总时限；区分文档事实与推论"
+        }
+      ]
+    },
+    {
+      "id": "limits",
+      "description": "解释连接池限制",
+      "queries": [
+        "HTTPX official resource limits max_connections max_keepalive_connections keepalive_expiry",
+        "HTTPX official pool timeout connection limits"
+      ],
+      "dependencies": [],
+      "target_sources": 1,
+      "priority": 1.0,
+      "criteria": [
+        {
+          "id": "limits",
+          "description": "说明 max_connections、max_keepalive_connections、keepalive_expiry 的作用"
+        },
+        {
+          "id": "pool",
+          "description": "说明连接池等待与 pool timeout 的关系"
+        }
+      ]
+    }
+  ]
+}

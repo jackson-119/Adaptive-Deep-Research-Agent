@@ -1,0 +1,12 @@
+{
+  "query": "合成演示：checkpointer 与 thread_id 如何用于持久化？",
+  "tasks": [
+    {
+      "id": "persistence",
+      "description": "checkpointer thread_id persistence",
+      "queries": [
+        "checkpointer thread_id persistence"
+      ]
+    }
+  ]
+}

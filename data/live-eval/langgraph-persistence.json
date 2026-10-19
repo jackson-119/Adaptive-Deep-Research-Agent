@@ -1,0 +1,47 @@
+{
+  "query": "根据官方文档，比较 LangGraph 的 checkpointer 与 Store，并说明内存检查点的持久化边界",
+  "tasks": [
+    {
+      "id": "checkpoint",
+      "description": "解释 checkpointer 的保存对象、thread_id 和内存实现边界",
+      "queries": [
+        "LangGraph official docs checkpointer thread_id InMemorySaver persistence",
+        "LangGraph official docs InMemorySaver process restart"
+      ],
+      "dependencies": [],
+      "target_sources": 1,
+      "priority": 1.0,
+      "criteria": [
+        {
+          "id": "scope",
+          "description": "说明 checkpointer 保存什么及 thread_id 的作用"
+        },
+        {
+          "id": "restart",
+          "description": "说明内存检查点在进程重启后能否恢复"
+        }
+      ]
+    },
+    {
+      "id": "store",
+      "description": "比较 Store 与 checkpointer 的适用场景",
+      "queries": [
+        "LangGraph official docs Store cross thread memory checkpointer",
+        "LangGraph official docs long term memory store namespace"
+      ],
+      "dependencies": [],
+      "target_sources": 1,
+      "priority": 1.0,
+      "criteria": [
+        {
+          "id": "scope",
+          "description": "说明 Store 的跨线程数据用途"
+        },
+        {
+          "id": "difference",
+          "description": "说明 Store 与 checkpointer 的职责差异，不能将二者视为等价替代"
+        }
+      ]
+    }
+  ]
+}

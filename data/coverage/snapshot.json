@@ -1,0 +1,23 @@
+{
+  "query": "State and persistence",
+  "searches": {
+    "state": [
+      {
+        "url": "https://example.org/state",
+        "title": "state",
+        "content": "synthetic summary"
+      }
+    ],
+    "persistence": [
+      {
+        "url": "https://example.org/persistence",
+        "title": "persistence",
+        "content": "synthetic summary"
+      }
+    ]
+  },
+  "pages": {
+    "https://example.org/state": "State schema defines fields for node updates.",
+    "https://example.org/persistence": "A checkpointer saves state; thread_id selects the conversation."
+  }
+}

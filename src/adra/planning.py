@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from adra.state import Action
+from adra.coverage import Criterion
 
 
 class SubTask(BaseModel):
@@ -15,9 +16,12 @@ class SubTask(BaseModel):
     dependencies: list[str] = Field(default_factory=list)
     target_sources: int = Field(default=1, ge=1, le=10)
     priority: float = Field(default=1, gt=0, le=10)
+    criteria: list[Criterion] = Field(default_factory=list, max_length=8)
 
     @model_validator(mode="after")
     def clean_queries(self):
+        if len({c.id for c in self.criteria}) != len(self.criteria):
+            raise ValueError("Criterion IDs must be unique within each task")
         self.queries = [q.strip() for q in self.queries]
         if any(not q for q in self.queries) or len(set(self.queries)) != len(self.queries):
             raise ValueError("Task queries must be nonempty and unique")
@@ -58,12 +62,20 @@ class PlanningPolicy:
     weighted coverage gain per estimated tool call. Neither alters the task DAG.
     """
 
-    def __init__(self, plan: Plan, writer, strategy: Literal["static", "adaptive"]):
+    def __init__(self, plan: Plan, writer, strategy: Literal["static", "adaptive"],
+                 coverage_mode="sources", assessor=None):
         if strategy not in ("static", "adaptive"):
             raise ValueError("Unknown planning strategy")
         self.plan = plan.model_copy(deep=True)
         self.writer = writer
         self.strategy = strategy
+        if coverage_mode not in ("sources", "semantic"):
+            raise ValueError("Unknown coverage mode")
+        self.coverage_mode = coverage_mode
+        self.assessor = assessor or writer
+        if coverage_mode == "semantic" and (not all(t.criteria for t in plan.tasks)
+                                             or not hasattr(self.assessor, "assess_coverage")):
+            raise ValueError("Semantic coverage needs criteria for every task and an assessor")
 
     @property
     def tokens(self):
@@ -94,10 +106,16 @@ class PlanningPolicy:
             sources = [e for e in state["evidence"] if task.id in e.get("task_ids", [])]
             read = sum(e["read"] for e in sources)
             coverage = min(1.0, read / task.target_sources)
-            if coverage == 1:
+            judgments = state.get("coverage", {}).get(task.id, {}).get("judgments", [])
+            semantic = (sum(j["status"] == "supported" for j in judgments) / len(task.criteria)
+                        if task.criteria else 0)
+            effective = semantic if self.coverage_mode == "semantic" else coverage
+            if effective == 1:
                 completed.add(task.id)
             summaries.append({"task_id": task.id, "description": task.description,
                               "source_coverage_proxy": coverage, "read_sources": read,
+                              "semantic_coverage": semantic if self.coverage_mode == "semantic" else None,
+                              "judgments": judgments,
                               "target_sources": task.target_sources})
 
         for task, summary in zip(self.plan.tasks, summaries):
@@ -122,7 +140,10 @@ class PlanningPolicy:
                 summary["status"] = "exhausted"
                 continue
             summary["status"] = "ready"
-            gain = min(1 / task.target_sources, 1 - summary["source_coverage_proxy"])
+            if self.coverage_mode == "semantic":
+                gain = min(1 / len(task.criteria), 1 - summary["semantic_coverage"])
+            else:
+                gain = min(1 / task.target_sources, 1 - summary["source_coverage_proxy"])
             score = task.priority * gain / estimated_cost
             candidates.append({"action": action.model_dump(), "score": score,
                                "estimated_cost": estimated_cost, "expected_proxy_gain": gain})
@@ -134,7 +155,8 @@ class PlanningPolicy:
         chosen = (max(affordable, key=lambda c: c["score"])
                   if self.strategy == "adaptive" and affordable
                   else affordable[0] if affordable else None)
-        return {"strategy": self.strategy, "tasks": summaries, "candidates": candidates,
+        return {"strategy": self.strategy, "coverage_mode": self.coverage_mode,
+                "tasks": summaries, "candidates": candidates,
                 "selected": chosen,
                 "stop_reason": ("" if chosen else "plan_covered" if len(completed)
                                 == len(self.plan.tasks) else "no_feasible_plan_action")}
@@ -147,6 +169,15 @@ class PlanningPolicy:
         report = self.writer.write(state)
         pending = [t["task_id"] for t in self.describe(state)["tasks"] if t["status"] != "covered"]
         if pending:
-            report.limitations.append("未达到来源阅读目标的子任务：" + ", ".join(pending))
-        report.limitations.append("来源覆盖仅按已阅读 URL 数量计算，尚未验证相关性或事实支持。")
+            label = "未满足验收要点的子任务：" if self.coverage_mode == "semantic" else "未达到来源阅读目标的子任务："
+            report.limitations.append(label + ", ".join(pending))
+        if self.coverage_mode == "semantic":
+            for task in self.describe(state)["tasks"]:
+                for item in task["judgments"]:
+                    if item["status"] != "supported":
+                        report.limitations.append(f"{task['task_id']}/{item['criterion_id']}: "
+                                                  f"{item['status']} — {item['reason']}")
+            report.limitations.append("覆盖判断来自模型或回放标注；原文存在性校验不代表语义判断正确。")
+        else:
+            report.limitations.append("来源覆盖仅按已阅读 URL 数量计算，尚未验证相关性或事实支持。")
         return report

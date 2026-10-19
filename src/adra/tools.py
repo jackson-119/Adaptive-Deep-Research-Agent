@@ -3,6 +3,8 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
+from adra.domains import DomainPolicy
+
 
 def canonical_url(url: str) -> str:
     parts = urlsplit(url)
@@ -36,8 +38,10 @@ class SnapshotTools:
 
 
 class TavilyTools:
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, allowed_domains=()):
         self.api_key = api_key
+        self.domain_policy = DomainPolicy(allowed_domains)
+        self.allowed_domains = self.domain_policy.domains
 
     def _post(self, endpoint: str, payload: dict) -> dict:
         # No implicit retries: every attempted request consumes one agent tool call.
@@ -50,10 +54,20 @@ class TavilyTools:
         return response.json()
 
     def search(self, query: str) -> list[dict]:
-        return self._post("search", {"query": query, "max_results": 5})["results"]
+        payload = {"query": query, "max_results": 5}
+        if self.allowed_domains:
+            payload.update(include_domains=list(self.allowed_domains), include_domains_mode="restrict")
+        # The executor rechecks every returned URL, including in snapshot mode.
+        return self._post("search", payload)["results"]
 
     def read(self, url: str) -> str:
+        self.domain_policy.require(url)
         results = self._post("extract", {"urls": [url]})["results"]
         if not results:
             raise ValueError("Extraction returned no content")
-        return results[0]["raw_content"]
+        result = results[0]
+        # Fail closed in restricted mode if extraction omits its source URL.
+        # A disclosed redirect to a disallowed host must not enter evidence.
+        if self.allowed_domains or "url" in result:
+            self.domain_policy.require(result.get("url", ""))
+        return result["raw_content"]

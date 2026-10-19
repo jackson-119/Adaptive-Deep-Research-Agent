@@ -14,6 +14,7 @@ from adra.planning import Plan, PlanningPolicy
 from adra.policy import DemoPolicy
 from adra.state import Budget
 from adra.tools import SnapshotTools
+from adra.domains import DomainPolicy
 
 
 class Case(BaseModel):
@@ -22,9 +23,11 @@ class Case(BaseModel):
     plan: Plan
     snapshot: dict
     budget: Budget
+    allowed_domains: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_snapshot(self):
+        self.allowed_domains = list(DomainPolicy(self.allowed_domains).domains)
         if self.snapshot.get("query") != self.plan.query:
             raise ValueError("Snapshot and plan query mismatch")
         required = {q for t in self.plan.tasks for q in t.queries}
@@ -47,7 +50,7 @@ def evaluate(suite: Path, output: Path) -> dict:
         for strategy in ("static", "adaptive"):
             policy = PlanningPolicy(case.plan, DemoPolicy(), strategy)
             result = run(case.plan.query, policy, SnapshotTools(case.snapshot),
-                         case.budget, task_id=case.id)
+                         case.budget, task_id=case.id, allowed_domains=case.allowed_domains)
             result.update(mode="synthetic_replay", strategy=strategy, model=None)
             save(result, output / case.id / strategy)
             rows.append({"case_id": case.id, "strategy": strategy,

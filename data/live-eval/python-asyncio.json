@@ -1,0 +1,47 @@
+{
+  "query": "根据 Python 3.12 官方文档，比较 asyncio.TaskGroup 与 asyncio.gather 的异常传播和取消行为",
+  "tasks": [
+    {
+      "id": "taskgroup",
+      "description": "说明 Python 3.12 TaskGroup 的失败与取消语义",
+      "queries": [
+        "Python 3.12 asyncio TaskGroup exception cancellation official docs",
+        "Python 3.12 TaskGroup ExceptionGroup CancelledError"
+      ],
+      "dependencies": [],
+      "target_sources": 1,
+      "priority": 1.0,
+      "criteria": [
+        {
+          "id": "failure",
+          "description": "说明一个子任务出现非取消异常时其他任务如何处理"
+        },
+        {
+          "id": "errors",
+          "description": "说明任务组异常如何汇总以及取消异常的特殊处理"
+        }
+      ]
+    },
+    {
+      "id": "gather",
+      "description": "说明 Python 3.12 gather 的异常与取消行为",
+      "queries": [
+        "Python 3.12 asyncio gather return_exceptions cancellation official docs",
+        "Python 3.12 gather cancel after exception done"
+      ],
+      "dependencies": [],
+      "target_sources": 1,
+      "priority": 1.0,
+      "criteria": [
+        {
+          "id": "default",
+          "description": "说明默认异常传播时其他子任务是否自动取消"
+        },
+        {
+          "id": "options",
+          "description": "说明 return_exceptions=True 与 gather 自身被取消的行为差异"
+        }
+      ]
+    }
+  ]
+}

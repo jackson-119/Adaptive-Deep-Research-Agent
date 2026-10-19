@@ -4,7 +4,7 @@
 
 当前提供可运行的研究基线、人工或模型生成任务图上的静态与自适应调度，以及可复现的离线对照实验。后续将逐步引入语义证据评估、动态重规划、Reflection 和 Planner 策略训练。
 
-> 当前处于研究原型阶段。离线示例使用合成资料；在线适配尚未完成带凭据的端到端验证。来源覆盖指标用于检查调度行为，不代表事实正确性或报告质量。
+> 当前处于研究原型阶段。离线示例使用合成资料；根据云服务器实测反馈，DeepSeek + Tavily 已完成在线端到端功能验证；算法有效性尚未评测。来源覆盖指标用于检查调度行为，不代表事实正确性或报告质量。
 
 [快速开始](#快速开始) · [在线研究](#在线研究) · [策略与架构](#策略与架构) · [复现实验](#复现实验) · [开发路线](docs/roadmap.md)
 
@@ -15,11 +15,12 @@
 | 研究执行 | LangGraph 循环，支持 `SEARCH`、`READ`、`STOP` |
 | 工具接入 | Tavily 搜索与正文提取；离线精确查询快照 |
 | 预算控制 | 工具调用数、决策步数硬上限；请求超时；重复动作拦截 |
+| 语义覆盖 | 可选模型逐要点评估、精确引文校验、缺口记录；尚非独立事实验证 |
 | 任务规划 | 人工/模型生成任务 DAG、依赖校验、备选查询、静态与自适应调度 |
-| 证据管理 | URL 去重、跨任务来源共享、来源编号与正文记录 |
+| 证据管理 | URL 去重、跨任务来源共享、来源编号与正文记录、精确域名白名单 |
 | 报告与轨迹 | Markdown 报告、JSON 状态、JSONL 逐步轨迹 |
 | 实验 | 5 种合成场景，分别运行两种规划策略；保存输入和汇总 |
-| 待实现 | 语义覆盖与事实验证、动态图更新、Reflection、SFT/GRPO |
+| 待实现 | 报告声明级事实验证、独立质量评测、动态图更新、Reflection、SFT/GRPO |
 
 ## 快速开始
 
@@ -64,9 +65,12 @@ uv run --locked adra \
 | --- | --- | --- |
 | `query` | 无 | 研究问题；离线模式可省略，取快照中的 `query` |
 | `--snapshot` | 无 | 离线快照路径；不指定时使用在线模式 |
+| `--allowed-domain` | 无限制 | 可重复指定允许的完整主机名；用于搜索、结果接收、正文提取和引用校验 |
 | `--strategy` | `baseline` | 可选 `baseline`、`static`、`adaptive` |
 | `--plan` | 无 | 任务计划 JSON；static/adaptive 使用此项或 `--auto-plan`，baseline 不接受 |
 | `--auto-plan` | 关闭 | 在线生成并校验任务计划；与 `--plan` 互斥，仅支持 static/adaptive |
+| `--coverage-mode` | `sources` | 可选 `semantic`：按验收要点判断任务完成，需 static/adaptive |
+| `--coverage-replay` | 无 | 离线语义模式必填；按输入哈希匹配人工标注回放 |
 | `--max-tools` | `6` | 工具调用硬上限，范围 0–100 |
 | `--max-steps` | `10` | 非 STOP 决策步骤硬上限，范围 1–200 |
 | `--output` | `outputs` | 运行结果的父目录，程序在其中创建唯一子目录 |
@@ -117,6 +121,68 @@ uv run --locked --extra live adra \
 `plan.json` 可在后续运行中通过 `--plan` 重用，以避免每次生成不同计划影响对照。
 失败记录只保存异常类型、用量和校验状态，不保存供应商原始错误或模型原始响应。
 详见 [自动规划说明](docs/auto-planning.md)。
+
+### 限定官方来源
+
+```sh
+uv run --locked --extra live adra \
+  '根据官方文档，说明 LangGraph 的状态管理与条件路由机制' \
+  --strategy adaptive --auto-plan \
+  --allowed-domain docs.langchain.com \
+  --allowed-domain reference.langchain.com \
+  --max-tools 6 --max-steps 8
+```
+
+域名只填主机名，不填 `https://`、路径、端口或通配符。多个参数表示允许其中任意一个。
+匹配忽略大小写和一个末尾点，并进行 IDNA 规范化；**不自动包含子域名**。
+`docs.langchain.com.example.org` 不会匹配 `docs.langchain.com`。
+
+限制传入 Tavily 的 `include_domains`（restrict 模式），执行器再次过滤搜索结果，
+READ 请求及提取服务返回的 URL 也须通过检查，最后复核报告引用的证据来源。
+受限模式下，Extract 未返回来源 URL 会拒绝该正文。离线快照执行相同结果过滤。
+过滤后没有可用来源时保留空证据，不回退至任意网站；调用仍计入原预算。
+
+`config.allowed_domains` 保存有效配置，`rejected_sources` 统计被拒绝的结果/阅读次数。
+新的 `provenance` 字段记录代码提交、工作区是否有修改和依赖版本，便于保留对照。
+域名约束不证明文本真实或语义支持；云端提取器未披露的重定向也无法在本地独立核验。
+当前约束作用于结构化证据引用，不能作为任意模型输出文本中所有 URL 的净化器。
+后续计划见 [证据质量改进](docs/evidence-quality.md)。
+
+### 长文档片段选择
+
+```sh
+uv run --locked adra \
+  --snapshot data/passages/snapshot.json \
+  --plan data/passages/plan.json --strategy adaptive \
+  --allowed-domain example.org --max-tools 2
+```
+
+这是合成演示：关键 `checkpointer` / `thread_id` 信息放在正文第 6000 字符之后。
+系统扫描全文，按子任务描述和查询选择片段，记录 `original_length`、`selected_length`、
+`truncated`、`raw_sha256` 和 `passages`。每个片段包含原文字符区间、段落编号及匹配分数。
+
+`run.json.raw_documents[证据ID]` 分别保留 `search` 摘要和 `read` 正文。
+原始文本不发送给模型，也不复制到每一步轨迹。共享来源关联新任务时，会用本地正文重新选段，
+不额外消耗工具调用。该方法是词项匹配，尚无语义相关性或引用支持判断。
+位置定义与限制详见 [长文档处理](docs/passages.md)。
+
+### 按验收要点评估覆盖
+
+在线命令增加 `--coverage-mode semantic`，自动生成计划时会要求每个子任务包含 `criteria`。
+模型按要点判断 supported / partial / missing，并提供原文引用及理由。程序核验引用属于
+已阅读的关联来源、存在于单个选中片段且与保存原文一致。只有全部要点 supported 才完成任务。
+
+```sh
+uv run --locked adra \
+  --snapshot data/coverage/snapshot.json --plan data/coverage/plan.json \
+  --strategy adaptive --coverage-mode semantic \
+  --coverage-replay data/coverage/assessments.json --max-tools 2
+```
+
+该人工标注合成回放中，阅读数量已达标，但缺少 persistence 要点，因此任务不会完成。
+改为 `--max-tools 4` 后会尝试已有备选查询并补齐示例证据。判断保存在 `coverage.json`；
+在线评估的 Token 和延迟纳入总成本。不启用该参数时，保留原有来源数量基线。
+详见 [语义覆盖与复核说明](docs/semantic-coverage.md)。模型判断仍可能出错，不代表独立事实验证。
 
 ## 策略与架构
 
@@ -205,22 +271,26 @@ uv run --locked python -m adra.evaluation \
 | --- | --- |
 | `tool_calls` / `steps` | 已执行的工具调用数与非 STOP 决策步骤数 |
 | `source_count` / `read_source_count` | 去重来源总数与成功阅读来源数 |
+| `truncated_sources` | 当前选中片段未覆盖完整工具文本的来源数量 |
+| `rejected_sources` | 被域名/URL 校验拒绝的结果或阅读次数，非唯一域名数量 |
 | `tool_errors` | 执行阶段错误记录数，包含重复动作拦截 |
 | `total_tokens` | 模型服务返回的总用量；离线演示为 `null` |
 | `token_usage_complete` | 是否获得完整模型用量元数据 |
 | `citation_reference_validity` | 非空报告中的引用编号通过已有证据检查；空报告为 `null` |
 | `source_coverage_proxy` | 规划模式下，各子任务来源阅读达标比例的平均值 |
-| `covered_tasks` | 达到来源阅读目标的子任务数量 |
+| `covered_tasks` | sources 模式下达到阅读目标；semantic 模式下所有验收要点均支持的任务数 |
+| `semantic_coverage` | semantic 模式下所有验收要点中 supported 的比例 |
+| `coverage_assessment_failures` | 最终状态中覆盖评估失败的任务数 |
 | `citation_support` / `task_quality` | 尚未评测，保留 `null` |
 
 目前有以下边界：
 
 - 工具次数与步骤有硬上限；总 Token 和总运行时间尚无硬预算。模型单次输出上限为 2048 Token。
 - 工具实际请求失败会消耗调用预算；调用前拒绝的非法或重复动作只消耗决策步骤。工具请求没有隐式重试。
-- READ 只允许读取已收集来源，证据正文最多保留 6000 字符。
+- READ 只允许读取已收集来源。原始工具文本保存在 `run.json.raw_documents`；提供给模型的每来源文本不超过 6000 字符，从全文选取而非直接取开头。
 - 引用检查只能确认编号存在，不能确认来源支持声明。没有证据时允许空结论。
 - 轨迹中的 `reward`、逐步 `token_cost` 为 `null`，尚未实现奖励或逐步 Token 归因。
-- 暂未实现语义事实验证、RAG、MCP、Reflection、SFT 或 GRPO。
+- 已实现可选任务级语义覆盖和引文存在性校验；暂未实现报告声明级事实验证、RAG、MCP、Reflection、SFT 或 GRPO。
 
 ## 项目结构
 

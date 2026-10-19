@@ -1,0 +1,26 @@
+{
+  "query": "State and persistence",
+  "tasks": [
+    {
+      "id": "state",
+      "description": "State and persistence",
+      "queries": [
+        "state",
+        "persistence"
+      ],
+      "dependencies": [],
+      "target_sources": 1,
+      "priority": 1,
+      "criteria": [
+        {
+          "id": "schema",
+          "description": "How is the state schema defined?"
+        },
+        {
+          "id": "persistence",
+          "description": "What do checkpointer and thread_id do?"
+        }
+      ]
+    }
+  ]
+}
