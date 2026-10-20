@@ -82,3 +82,43 @@ def test_model_payload_does_not_repeat_passages_or_trajectory():
     policy.assess_coverage(task, evidence)
     assert json.dumps(policy.payload).count(text) == 1
     assert evidence[0]["content"] == text  # Full persisted evidence is untouched.
+
+
+def test_missing_criterion_query_preempts_irrelevant_unread_source():
+    plan = Plan.model_validate({"query": "state", "tasks": [{
+        "id": "a", "description": "state", "queries": ["overview", "checkpointer thread_id"],
+        "criteria": [{"id": "persist", "description": "persistence",
+                      "retrieval_terms": ["checkpointer", "thread_id"]}]}]})
+    policy = PlanningPolicy(plan, DemoPolicy(), "adaptive", "semantic", MissingAssessor())
+    state = {"evidence": [
+        {"id": "E1", "url": "https://example.org/a", "title": "overview",
+         "content": "state schema", "read": True, "task_ids": ["a"]},
+        {"id": "E2", "url": "https://example.org/b", "title": "Annotation",
+         "content": "state schema", "read": False, "task_ids": ["a"]}],
+        "attempted_actions": [{"kind": "SEARCH", "argument": "overview", "task_id": "a"}],
+        "remaining_tool_budget": 2, "remaining_steps": 2}
+    candidate = policy.describe(state)["selected"]
+    assert candidate["action"]["argument"] == "checkpointer thread_id"
+    assert candidate["selection_reason"] == "gap_query"
+    # With only one call left, do not spend it on an unaffordable search/read pair.
+    state["remaining_tool_budget"] = 1
+    assert policy.decide(state).kind == "READ"
+    # A relevant unread source wins over a weaker alternative query.
+    state["remaining_tool_budget"] = 2
+    state["evidence"][1]["content"] = "persistence checkpointer thread_id"
+    assert policy.decide(state).argument == "https://example.org/b"
+
+
+def test_python_scope_filters_search_and_preserves_sources_baseline():
+    plan = Plan.model_validate({"query": "Python state",
+        "allowed_url_prefixes": ["https://example.org/python"],
+        "tasks": [{"id": "a", "description": "Python state", "queries": ["state"]}]})
+    snapshot = {"searches": {"state": [
+        {"url": "https://example.org/javascript/state", "content": "Annotation"},
+        {"url": "https://example.org/python/state", "content": "StateGraph"}]},
+        "pages": {"https://example.org/python/state": "Python StateGraph"}}
+    result = run(plan.query, PlanningPolicy(plan, DemoPolicy(), "adaptive"),
+                 SnapshotTools(snapshot), Budget(tool_calls=2))
+    assert result["metrics"]["rejected_sources"] == 1
+    assert result["metrics"]["covered_tasks"] == 1
+    assert [e["url"] for e in result["evidence"]] == ["https://example.org/python/state"]

@@ -68,6 +68,6 @@ class TavilyTools:
         result = results[0]
         # Fail closed in restricted mode if extraction omits its source URL.
         # A disclosed redirect to a disallowed host must not enter evidence.
-        if self.allowed_domains or "url" in result:
+        if self.allowed_domains or self.domain_policy.url_prefixes or "url" in result:
             self.domain_policy.require(result.get("url", ""))
         return result["raw_content"]

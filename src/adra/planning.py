@@ -6,6 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from adra.state import Action
 from adra.coverage import Criterion
+from adra.domains import DomainPolicy
+from adra.passages import terms
 
 
 class SubTask(BaseModel):
@@ -32,9 +34,11 @@ class Plan(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     query: str = Field(min_length=1)
     tasks: list[SubTask] = Field(min_length=1, max_length=20)
+    allowed_url_prefixes: list[str] = Field(default_factory=list, max_length=30)
 
     @model_validator(mode="after")
     def validate_graph(self):
+        DomainPolicy(url_prefixes=self.allowed_url_prefixes)
         ids = {t.id for t in self.tasks}
         if len(ids) != len(self.tasks):
             raise ValueError("Task IDs must be unique")
@@ -129,6 +133,31 @@ class PlanningPolicy:
             unread = next((e for e in sources if not e["read"]
                            and ("READ", e["url"]) not in attempted), None)
             query = next((q for q in task.queries if ("SEARCH", q) not in attempted), None)
+            selection_reason = "source_order"
+            if self.coverage_mode == "semantic":
+                statuses = {j["criterion_id"]: j["status"] for j in summary["judgments"]}
+                gaps = [c for c in task.criteria if statuses.get(c.id) != "supported"]
+                vocab = [terms(" ".join([c.description, *c.retrieval_terms])) for c in gaps]
+
+                def relevance(text):
+                    words = terms(text)
+                    return sum(len(words & v) / max(1, len(v)) for v in vocab)
+
+                remaining = [e for e in sources if not e["read"]
+                             and ("READ", e["url"]) not in attempted]
+                unread = max(remaining, key=lambda e: relevance(
+                    e["title"] + " " + e["content"]), default=None)
+                queries = [q for q in task.queries if ("SEARCH", q) not in attempted]
+                # Preserve the initial query; rank alternatives once evidence exists.
+                if summary["read_sources"] and queries:
+                    query = max(queries, key=relevance)
+                    if (min(state["remaining_tool_budget"], state["remaining_steps"]) >= 2
+                            and (unread is None or relevance(query) > relevance(
+                                unread["title"] + " " + unread["content"]))):
+                        unread = None
+                        selection_reason = "gap_query"
+                if unread:
+                    selection_reason = "gap_source"
             if unread:
                 action = Action(kind="READ", argument=unread["url"], task_id=task.id)
                 estimated_cost = 1
@@ -146,6 +175,7 @@ class PlanningPolicy:
                 gain = min(1 / task.target_sources, 1 - summary["source_coverage_proxy"])
             score = task.priority * gain / estimated_cost
             candidates.append({"action": action.model_dump(), "score": score,
+                               "selection_reason": selection_reason,
                                "estimated_cost": estimated_cost, "expected_proxy_gain": gain})
 
         affordable = [c for c in candidates
@@ -178,7 +208,9 @@ class PlanningPolicy:
         return Action.model_validate(selected["action"]) if selected else Action(kind="STOP")
 
     def write(self, state: dict):
-        report = self.writer.write(state)
+        report = self.writer.write({**state, "research_scope": {
+            "tasks": [t.description for t in self.plan.tasks],
+            "allowed_url_prefixes": self.plan.allowed_url_prefixes}})
         pending = [t["task_id"] for t in self.describe(state)["tasks"] if t["status"] != "covered"]
         if pending:
             label = "未满足验收要点的子任务：" if self.coverage_mode == "semantic" else "未达到来源阅读目标的子任务："

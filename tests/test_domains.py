@@ -10,6 +10,26 @@ from adra.state import Action, Budget
 from adra.tools import SnapshotTools, TavilyTools
 
 
+@pytest.mark.parametrize("suffix", [
+    "/javascript/a", "/pythonish/a", "/python/../javascript/a",
+    "/python/%2e%2e/javascript/a", "/python/%252e%252e/javascript/a",
+    "/python/%5c../javascript/a",
+])
+def test_path_scope_rejects_other_language_and_traversal(suffix):
+    policy = DomainPolicy(["example.org"], ["https://example.org/python"])
+    assert not policy.allows("https://example.org" + suffix)
+    assert policy.allows("https://example.org/python/state?x=1#section")
+
+
+def test_extraction_rejects_disclosed_cross_language_redirect(monkeypatch):
+    tools = TavilyTools("fake")
+    tools.domain_policy = DomainPolicy(url_prefixes=["https://example.org/python"])
+    monkeypatch.setattr(TavilyTools, "_post", lambda *args: {"results": [{
+        "url": "https://example.org/javascript/state", "raw_content": "Annotation"}]})
+    with pytest.raises(SourceDomainError):
+        tools.read("https://example.org/python/state")
+
+
 @pytest.mark.parametrize('url', [
     'https://docs.langchain.com/a', 'https://DOCS.LANGCHAIN.COM/a',
     'https://docs.langchain.com./a', 'https://docs.langchain.com:443/a',

@@ -3,10 +3,10 @@
   "tasks": [
     {
       "id": "t1",
-      "description": "解释 State、StateGraph、reducer 与 checkpointer/thread_id 的作用",
+      "description": "仅限 LangGraph Python：解释 State、StateGraph、reducer 与 checkpointer/thread_id 的作用",
       "queries": [
-        "LangGraph official docs state management StateGraph reducer Annotated",
-        "LangGraph official docs persistence checkpointer thread_id"
+        "LangGraph Python official docs state management StateGraph reducer Annotated",
+        "LangGraph Python official docs persistence checkpointer thread_id"
       ],
       "dependencies": [],
       "target_sources": 1,
@@ -49,10 +49,10 @@
     },
     {
       "id": "t2",
-      "description": "解释 add_conditional_edges、路由函数、path_map 与 END 常量",
+      "description": "仅限 LangGraph Python：解释 add_conditional_edges、路由函数、path_map 与 END 常量",
       "queries": [
-        "LangGraph official docs conditional edges add_conditional_edges routing",
-        "LangGraph official docs conditional edges END path_map"
+        "LangGraph Python official docs conditional edges add_conditional_edges routing",
+        "LangGraph Python official docs conditional edges END path_map"
       ],
       "dependencies": [],
       "target_sources": 1,
@@ -89,5 +89,9 @@
         }
       ]
     }
+  ],
+  "allowed_url_prefixes": [
+    "https://docs.langchain.com/oss/python/langgraph",
+    "https://reference.langchain.com/python"
   ]
 }

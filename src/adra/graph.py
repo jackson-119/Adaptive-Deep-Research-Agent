@@ -29,7 +29,11 @@ def view(state: dict, budget: Budget) -> dict:
 
 def build_graph(policy: Policy, tools: ResearchTools, budget: Budget, allowed_domains=None):
     domains = DomainPolicy(allowed_domains if allowed_domains is not None
-                           else getattr(tools, "allowed_domains", ()))
+                           else getattr(tools, "allowed_domains", ()),
+                           getattr(getattr(policy, "plan", None), "allowed_url_prefixes", ()))
+    # Apply the same scope to extraction response URLs (including disclosed redirects).
+    if hasattr(tools, "domain_policy"):
+        tools.domain_policy = domains
 
     def select(item, raw, query):
         plan = getattr(policy, "plan", None)
