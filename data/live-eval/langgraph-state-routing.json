@@ -14,15 +14,36 @@
       "criteria": [
         {
           "id": "schema",
-          "description": "说明状态 schema 与节点返回部分状态更新的关系"
+          "description": "说明状态 schema 与节点返回部分状态更新的关系",
+          "retrieval_terms": [
+            "state",
+            "schema",
+            "partial",
+            "update"
+          ]
         },
         {
           "id": "reducer",
-          "description": "说明默认覆盖与 Annotated 自定义 reducer 合并更新的区别"
+          "description": "说明默认覆盖与 Annotated 自定义 reducer 合并更新的区别",
+          "retrieval_terms": [
+            "default",
+            "reducer",
+            "ignores",
+            "left",
+            "replaces",
+            "right",
+            "Annotated"
+          ]
         },
         {
           "id": "persistence",
-          "description": "说明 checkpointer 如何保存状态，以及 thread_id 如何标识线程"
+          "description": "说明 checkpointer 如何保存状态，以及 thread_id 如何标识线程",
+          "retrieval_terms": [
+            "checkpointer",
+            "thread_id",
+            "checkpoint",
+            "thread"
+          ]
         }
       ]
     },
@@ -39,15 +60,32 @@
       "criteria": [
         {
           "id": "routing",
-          "description": "说明路由函数如何根据状态选择后续节点"
+          "description": "说明路由函数如何根据状态选择后续节点",
+          "retrieval_terms": [
+            "conditional",
+            "edges",
+            "routing",
+            "state"
+          ]
         },
         {
           "id": "path_map",
-          "description": "说明 path_map 的作用及不提供映射时路由返回值的要求"
+          "description": "说明 path_map 的作用及不提供映射时路由返回值的要求",
+          "retrieval_terms": [
+            "path_map",
+            "path",
+            "node",
+            "mapping"
+          ]
         },
         {
           "id": "end",
-          "description": "明确导入的 END 常量与普通字符串标签的区别，并说明如何终止路由"
+          "description": "明确导入的 END 常量与普通字符串标签的区别，并说明如何终止路由",
+          "retrieval_terms": [
+            "END",
+            "__end__",
+            "termination"
+          ]
         }
       ]
     }

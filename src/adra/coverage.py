@@ -11,6 +11,7 @@ class Criterion(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     id: str = Field(min_length=1)
     description: str = Field(min_length=1)
+    retrieval_terms: list[str] = Field(default_factory=list, max_length=20)
 
 
 class Citation(BaseModel):

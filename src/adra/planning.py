@@ -151,6 +151,15 @@ class PlanningPolicy:
         affordable = [c for c in candidates
                       if c["estimated_cost"] <= state["remaining_tool_budget"]
                       and c["estimated_cost"] <= state["remaining_steps"]]
+        # Semantic gaps can persist after many reads. Balance attempts across
+        # eligible tasks before applying the cost score, rather than starving
+        # an unstarted task behind an endless queue of cheaper reads.
+        if self.strategy == "adaptive" and self.coverage_mode == "semantic" and affordable:
+            attempts = state.get("attempted_actions", [])
+            counts = {t.id: sum(a.get("task_id") == t.id and a["kind"] != "STOP"
+                                for a in attempts) for t in self.plan.tasks}
+            least = min(counts[c["action"]["task_id"]] for c in affordable)
+            affordable = [c for c in affordable if counts[c["action"]["task_id"]] == least]
         # Stable ties preserve plan order; static uses the same eligibility rules.
         chosen = (max(affordable, key=lambda c: c["score"])
                   if self.strategy == "adaptive" and affordable
@@ -158,6 +167,9 @@ class PlanningPolicy:
         return {"strategy": self.strategy, "coverage_mode": self.coverage_mode,
                 "tasks": summaries, "candidates": candidates,
                 "selected": chosen,
+                "scheduling_rule": ("balanced_attempts_then_score"
+                                    if self.strategy == "adaptive" and self.coverage_mode == "semantic"
+                                    else "score" if self.strategy == "adaptive" else "plan_order"),
                 "stop_reason": ("" if chosen else "plan_covered" if len(completed)
                                 == len(self.plan.tasks) else "no_feasible_plan_action")}
 

@@ -36,6 +36,13 @@ def build_graph(policy: Policy, tools: ResearchTools, budget: Budget, allowed_do
         focuses = [{"task_id": task.id, "query": " ".join([task.description, *task.queries,
                                                            *(c.description for c in task.criteria)])}
                    for task in plan.tasks if task.id in item["task_ids"]] if plan else []
+        if plan and getattr(policy, "coverage_mode", "sources") == "semantic":
+            criterion_focuses = [
+                {"task_id": task.id, "criterion_id": c.id,
+                 "query": " ".join([c.description, *c.retrieval_terms])}
+                for task in plan.tasks if task.id in item["task_ids"] for c in task.criteria
+            ]
+            focuses = criterion_focuses + focuses
         if not focuses:
             focuses = [{"task_id": None, "query": query}]
         item.update(select_passages(raw, focuses))
