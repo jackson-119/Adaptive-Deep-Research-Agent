@@ -318,6 +318,8 @@ uv run --locked python -m adra.evaluation \
 
 ## 开发与验证
 
+官方来源、长文档片段选择和语义覆盖的真实调用验收，见 [固定计划真实任务复测](docs/live-evaluation.md)：包含原 LangGraph 问题的配对命令、5 个固定计划和 3–5 个任务的批量运行方法。
+
 ```sh
 # 运行离线测试，不需要 API Key
 uv run --locked --extra dev pytest -q
