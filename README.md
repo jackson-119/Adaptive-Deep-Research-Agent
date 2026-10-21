@@ -45,19 +45,25 @@ flowchart TD
 
 这是**概念反馈图**，不是源码逐边对应图。目标状态由反思更新，最终报告评分不反馈给研究调度。实际节点路由、预算停止与版本字段见 [架构设计](docs/architecture.md)。
 
-| 模块 | 主要职责 | 代码与细节 |
-| --- | --- | --- |
-| [研究简报](docs/implementation.md#module-brief) | 定义问题范围和固定验收项 | `planning.py`、`policy.py` |
-| [目标与反思](docs/implementation.md#module-reflection) | 维护目标状态、决定是否反思 | `research_control.py`、`graph.py` |
-| [研究控制器](docs/implementation.md#module-controller) | 选择动作并执行硬预算 | `graph.py`、`research_models.py` |
-| [共享证据库](docs/implementation.md#module-evidence) | 原文共享、URL 去重、出处记录 | `evidence_store.py` |
-| [搜索与抓取](docs/implementation.md#module-tools) | 获取正文并检查来源范围 | `tools.py`、`domains.py` |
-| [本地检索](docs/implementation.md#module-retrieval) | BM25 排序与片段分配 | `evidence_store.py` |
-| [证据交接与写作](docs/implementation.md#module-writing) | 汇合历史片段并生成报告 | `graph.py`、`policy.py` |
-| [最终评估](docs/implementation.md#module-evaluation) | 按验收项评分，可独立重评 | `coverage.py`、`report_evaluation.py` |
-| [声明核验](docs/implementation.md#module-verification) | 检查实际引用是否支持声明 | `verification.py` |
+下表逐一对应图中的 **13 个节点**，名称与图中一致。表中的源码函数是实现位置；一个概念节点不一定对应一个独立文件或 LangGraph 执行节点。
 
-模块是职责划分，不是九个独立文件夹或九个 Agent。目录树、函数分工和状态交接表见 [Implementation Details](docs/implementation.md)。
+| 图中节点 | 输入与职责 | 输出及后续流向 | 对应实现与详细说明 |
+| --- | --- | --- | --- |
+| **Research Query** | 接收用户研究问题，作为范围和语言要求的起点 | 问题文本进入 Planning；运行时保留原问题 | `cli.main()`；[输入与简报](docs/implementation.md#module-brief) |
+| **Planning 与固定验收标准** | 加载固定计划或根据问题生成简报，定义主题、验收项与来源范围 | 简报供 Research Controller 使用，验收项用于初始化 Goal State Tracker | `Plan`、`ModelPolicy.generate_brief()`、`graph.brief()`；[简报实现](docs/implementation.md#module-brief) |
+| **Goal State Tracker** | 保存每个验收目标的状态、缺口与引用；接收反思更新，来源变化时使旧支持状态失效 | 暂定目标状态提供给 Research Controller 和反思触发判断；不改变原验收标准 | `initial_goals()`、`update_goals()`、`invalidate_stale_goals()`；[目标状态](docs/implementation.md#module-reflection) |
+| **Research Controller** | 读取简报、目标、证据观测及预算，选择 SEARCH、READ、RETRIEVE 或 FINISH | 普通行动进入工具执行；相关事件进入触发判断；结束时进入 Evidence Handoff | `graph.context()`、`controller()`、`ModelPolicy.research()`；[控制器](docs/implementation.md#module-controller) |
+| **工具执行与本地检索** | 校验行动、重复请求和来源范围；SEARCH/READ 请求外部服务，RETRIEVE 检索已有原文 | 外部结果更新 Global Evidence Store；本地检索读取证据库，不新增网络请求 | `execute()`、`retrieval()`、`TavilyTools`；[工具](docs/implementation.md#module-tools) / [检索](docs/implementation.md#module-retrieval) |
+| **Global Evidence Store** | 按 URL 汇集来源，分别保存搜索片段、已读正文与哈希；供所有主题共享 | 为片段选择、写作交接和后续核验提供原文 | `add_source()`、`evidence`、`raw_documents`；[证据库](docs/implementation.md#module-evidence) |
+| **证据片段与进展观测** | 从共享正文选择有界片段，记录来源、偏移、动作结果及新增字符 | 更新 notes、片段历史和 transitions，供 Reflection Trigger? 与下一轮控制器读取 | `retrieve()`、`graph.retrieval()`；[选段与进展计量](docs/implementation.md#module-retrieval) |
+| **Reflection Trigger?** | 根据进展、目标缺口、结束意图或疑似冲突，检查触发条件、冷却、次数及剩余预算 | 触发时进入 Structured Reflection；不触发则继续决策，已获准结束时进入交接 | `reflection_trigger()`、图中的条件路由；[触发规则](docs/implementation.md#module-reflection) |
+| **Structured Reflection** | 接收目标、缺口、最近行动和证据，调用模型生成目标判断与查询建议，并校验引文 | 有效结果更新 Goal State Tracker、建议交给 Research Controller；失败保留原目标并记录原因 | `graph.reflect()`、`ModelPolicy.reflect()`、`update_goals()`；[反思执行](docs/implementation.md#module-reflection) |
+| **Evidence Handoff** | 汇合验收主题查询、有效行动查询与历史片段，校验出处并分配写作字符预算 | 将选定原文传入 Report Generation，保存实际写作证据 | `synthesize()` 中的 `handoff_evidence()`；[证据交接](docs/implementation.md#module-writing) |
+| **Report Generation** | 根据问题、交接证据和研究范围生成声明、来源 ID 与局限 | 结构化 Report 进入 Coverage Evaluation；不会等待评分后才生成事实 | `ModelPolicy.write()`、`Report`、`Claim`；[写作实现](docs/implementation.md#module-writing) |
+| **Coverage Evaluation** | 对最终报告逐主题检查原验收项，选择支持证据、验证引文并有限重试失败项 | 保存 supported/partial/missing 或未完成状态，随后进入 Claim Verification | `evaluate_report()`、`refresh_coverage()`；[覆盖评估](docs/implementation.md#module-evaluation) |
+| **Claim Verification** | 只在每条声明实际引用的来源中检索，判断支持、矛盾或证据不足，并校验引用位置 | 保存逐声明 verdict 与核验完整性；结束流程，不自动改写报告或反馈研究调度 | `verify_report()`、`validate_quotes()`；[声明核验](docs/implementation.md#module-verification) |
+
+图中 T → E → U 概括了“行动使用或更新证据库，再形成观测”：RETRIEVE 读取已有原文，并不再次下载。Evidence Handoff 和 Report Generation 在代码中由同一个 `synthesize()` 节点衔接；Reflection Trigger? 是路由判断，不是一次模型调用。目录树、实际执行节点与完整数据交接见 [Implementation Details](docs/implementation.md)。
 
 <a id="algorithms"></a>
 
