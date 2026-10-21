@@ -1,3 +1,5 @@
+> 历史实现说明：以下描述对应 v1 基线。v2 正式入口见 [架构](architecture.md) 与 [README](../README.md)；旧调度器仅在 `adra.legacy` 中保留用于复现。
+
 # 在线验证后的证据质量改进
 
 依据用户提供的云服务器实测反馈：DeepSeek + Tavily 已跑通研究、自动规划、报告和轨迹保存。

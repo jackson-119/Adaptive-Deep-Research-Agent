@@ -3,7 +3,7 @@ from copy import deepcopy
 import pytest
 
 from adra.coverage import research_notes
-from adra.planning import Plan, PlanningPolicy
+from adra.legacy.planning import Plan, PlanningPolicy
 from adra.policy import DemoPolicy, ModelPolicy
 from adra.state import Report, Claim
 

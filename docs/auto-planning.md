@@ -1,3 +1,5 @@
+> 历史实现说明：以下描述对应 v1 基线。v2 正式入口见 [架构](architecture.md) 与 [README](../README.md)；旧调度器仅在 `adra.legacy` 中保留用于复现。
+
 # 自动任务分解
 
 自动规划是研究循环前的独立步骤。使用 `--strategy static|adaptive --auto-plan`，由当前

@@ -9,8 +9,8 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from adra.cli import save
-from adra.graph import run
-from adra.planning import Plan, PlanningPolicy
+from adra.legacy.graph import run
+from adra.legacy.planning import Plan, PlanningPolicy
 from adra.policy import DemoPolicy
 from adra.state import Budget
 from adra.tools import SnapshotTools

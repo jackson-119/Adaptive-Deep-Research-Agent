@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from adra.cli import save
-from adra.graph import run
+from adra.legacy.graph import run
 from adra.policy import DemoPolicy
 from adra.state import Action, Budget, Claim, Report
 from adra.tools import SnapshotTools

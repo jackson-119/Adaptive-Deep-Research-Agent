@@ -50,7 +50,7 @@ def test_fixed_plan_failure_also_saves_safe_record(monkeypatch, tmp_path):
     broken = tmp_path / "plan.json"
     broken.write_text('{"query": "q", "tasks": []}')
     monkeypatch.setattr("sys.argv", ["adra", "q", "--plan", str(broken),
-                                    "--strategy", "adaptive", "--output", str(tmp_path / "out")])
+                                    "--strategy", "research", "--output", str(tmp_path / "out")])
     with pytest.raises(SystemExit):
         main()
     failure = json.loads(next((tmp_path / "out").glob("*/failure.json")).read_text())
@@ -64,7 +64,7 @@ def test_batch_dry_run_does_not_spawn_or_create_outputs(monkeypatch, tmp_path, c
     output = tmp_path / "out"
     monkeypatch.setattr("sys.argv", ["batch", "--output", str(output)])
     batch_main()
-    assert "6 runs" in capsys.readouterr().out
+    assert "3 runs" in capsys.readouterr().out
     assert not output.exists()
 
 
@@ -98,7 +98,7 @@ def test_batch_execution_freezes_plans_and_keeps_failed_runs(monkeypatch, tmp_pa
             "error_type": "TimeoutError", "total_tokens": 12}))
         return SimpleNamespace(returncode=1)
     monkeypatch.setattr("subprocess.run", fake_run)
-    monkeypatch.setattr("sys.argv", ["batch", "--execute", "--cases", "langgraph-state-routing",
+    monkeypatch.setattr("sys.argv", ["batch", "--execute", "--cases", "langgraph-state-routing", "python-asyncio",
                                     "--output", str(tmp_path)])
     with pytest.raises(SystemExit) as exc:
         batch_main()

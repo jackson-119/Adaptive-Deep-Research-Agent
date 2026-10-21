@@ -38,8 +38,9 @@ class SnapshotTools:
 
 
 class TavilyTools:
-    def __init__(self, api_key: str, allowed_domains=()):
+    def __init__(self, api_key: str, allowed_domains=(), include_raw_content=False):
         self.api_key = api_key
+        self.include_raw_content = include_raw_content
         self.domain_policy = DomainPolicy(allowed_domains)
         self.allowed_domains = self.domain_policy.domains
 
@@ -55,6 +56,8 @@ class TavilyTools:
 
     def search(self, query: str) -> list[dict]:
         payload = {"query": query, "max_results": 5}
+        if self.include_raw_content:
+            payload["include_raw_content"] = True
         if self.allowed_domains:
             payload.update(include_domains=list(self.allowed_domains), include_domains_mode="restrict")
         # The executor rechecks every returned URL, including in snapshot mode.

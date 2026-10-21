@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 
 from adra.evaluation import evaluate
-from adra.graph import run
-from adra.planning import Plan, PlanningPolicy
+from adra.legacy.graph import run
+from adra.legacy.planning import Plan, PlanningPolicy
 from adra.policy import DemoPolicy
 from adra.state import Budget
 from adra.tools import SnapshotTools
@@ -138,7 +138,7 @@ def test_cli_rejects_inconsistent_plan(arguments, tmp_path):
     import subprocess
     import sys
     result = subprocess.run(
-        [sys.executable, '-m', 'adra.cli', *arguments, '--output', str(tmp_path / 'runs')],
+        [sys.executable, '-m', 'adra.legacy.cli', *arguments, '--output', str(tmp_path / 'runs')],
         capture_output=True, text=True,
     )
     assert result.returncode == 2

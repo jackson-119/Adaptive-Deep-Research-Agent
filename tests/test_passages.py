@@ -2,9 +2,9 @@ import hashlib
 import json
 
 from adra.cli import save
-from adra.graph import run
+from adra.legacy.graph import run
 from adra.passages import select_passages
-from adra.planning import Plan, PlanningPolicy
+from adra.legacy.planning import Plan, PlanningPolicy
 from adra.policy import DemoPolicy
 from adra.state import Budget
 from adra.tools import SnapshotTools

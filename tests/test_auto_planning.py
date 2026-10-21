@@ -3,9 +3,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from adra.cli import main
-from adra.graph import run
-from adra.planning import PlanningPolicy
+from adra.legacy.cli import main
+from adra.legacy.graph import run
+from adra.legacy.planning import PlanningPolicy
 from adra.policy import ModelPolicy
 from adra.state import Budget
 from adra.tools import SnapshotTools

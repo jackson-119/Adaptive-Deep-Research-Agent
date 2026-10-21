@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-from adra.cli import main
+from adra.legacy.cli import main
 from adra.domains import DomainPolicy, SourceDomainError
-from adra.graph import build_graph, run
+from adra.legacy.graph import build_graph, run
 from adra.policy import DemoPolicy
 from adra.state import Action, Budget
 from adra.tools import SnapshotTools, TavilyTools

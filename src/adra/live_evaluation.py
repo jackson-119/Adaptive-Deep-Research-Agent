@@ -1,4 +1,4 @@
-"""Sequential paired live runs with frozen plans; dry-run unless --execute."""
+"""Research runs with frozen briefs and post-report evaluation; dry-run unless --execute."""
 
 import argparse
 import hashlib
@@ -28,7 +28,7 @@ def prepare_cases(manifest: Path, selected):
         raw = Path(case["plan"]).read_text(encoding="utf-8")
         plan = Plan.model_validate_json(raw)
         if not all(t.criteria for t in plan.tasks):
-            raise ValueError("Paired semantic runs require criteria")
+            raise ValueError("Final evaluation requires criteria")
         domains = DomainPolicy(case["allowed_domains"], plan.allowed_url_prefixes)
         output.append({**case, "allowed_domains": list(domains.domains),
                        "plan_data": plan.model_dump(),
@@ -38,7 +38,7 @@ def prepare_cases(manifest: Path, selected):
 
 def build_command(case, mode, plan_path, output, budget, max_model_calls):
     command = [sys.executable, "-m", "adra.cli", case["plan_data"]["query"],
-               "--plan", str(plan_path), "--strategy", "adaptive",
+               "--plan", str(plan_path), "--strategy", "research",
                "--coverage-mode", mode, "--max-tools", str(budget.tool_calls),
                "--max-steps", str(budget.steps), "--max-model-calls", str(max_model_calls),
                "--output", str(output)]
@@ -81,7 +81,7 @@ def main():
         cases = prepare_cases(args.manifest, args.cases)
     except (ValueError, OSError, KeyError) as exc:
         parser.error(f"Invalid batch inputs ({type(exc).__name__})")
-    count = len(cases) * 2 * args.repeat
+    count = len(cases) * args.repeat
     print(f"{count} runs; each <= {budget.tool_calls} tools, {args.max_model_calls} model requests.")
     if not args.execute:
         print("Dry run: no API calls. Add --execute to start.")
@@ -102,8 +102,8 @@ def main():
                                          encoding="utf-8")
     records = []
     for repeat in range(args.repeat):
-        # Alternate order across repeats to reduce systematic time/order effects.
-        modes = ("sources", "semantic") if repeat % 2 == 0 else ("semantic", "sources")
+        # Each report is evaluated after generation; no second research run for scoring.
+        modes = ("semantic",)
         for case in cases:
             for mode in modes:
                 output = batch / case["id"] / mode / str(repeat + 1)

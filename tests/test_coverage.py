@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import pytest
 
 from adra.coverage import Assessment, ReplayAssessor, assessment_key
-from adra.graph import run
-from adra.planning import Plan, PlanningPolicy
+from adra.legacy.graph import run
+from adra.legacy.planning import Plan, PlanningPolicy
 from adra.policy import DemoPolicy, ModelPolicy
 from adra.state import Budget
 from adra.tools import SnapshotTools
@@ -191,7 +191,7 @@ def test_dependency_waits_for_semantic_support(case):
 
 
 def test_cli_semantic_replay(monkeypatch, tmp_path):
-    from adra.cli import main
+    from adra.legacy.cli import main
     monkeypatch.setattr('sys.argv', ['adra', '--snapshot', 'data/coverage/snapshot.json',
         '--plan', 'data/coverage/plan.json', '--strategy', 'adaptive',
         '--coverage-mode', 'semantic', '--coverage-replay', 'data/coverage/assessments.json',
@@ -210,7 +210,7 @@ def test_cli_semantic_replay(monkeypatch, tmp_path):
     ['--coverage-replay', 'data/coverage/assessments.json'],
 ])
 def test_invalid_semantic_cli(monkeypatch, args):
-    from adra.cli import main
+    from adra.legacy.cli import main
     monkeypatch.setattr('sys.argv', ['adra', *args])
     with pytest.raises(SystemExit) as caught:
         main()

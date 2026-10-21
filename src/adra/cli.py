@@ -6,14 +6,12 @@ from pathlib import Path
 from uuid import uuid4
 
 from adra.graph import run
-from adra.policy import DemoPolicy
 from adra.configuration import RuntimeConfig
-from adra.planning import Plan, PlanningPolicy
+from adra.planning import Plan
 from adra.state import Budget
-from adra.tools import SnapshotTools, TavilyTools
+from adra.tools import TavilyTools
 from adra.domains import DomainPolicy
 from adra.provenance import runtime_provenance
-from adra.coverage import ReplayAssessor
 
 
 def save(result: dict, directory: Path) -> None:
@@ -34,6 +32,12 @@ def save(result: dict, directory: Path) -> None:
     if "plan" in result:
         (directory / "plan.json").write_text(
             json.dumps(result["plan"], ensure_ascii=False, indent=2), encoding="utf-8")
+    if "evaluation_status" in result:
+        (directory / "evaluation.json").write_text(json.dumps({
+            "status": result["evaluation_status"], "target": "final_report",
+            "metric": "fraction_of_report_criteria_supported_by_retrieved_sources",
+            "coverage": result.get("coverage", {}),
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
     if result.get("coverage"):
         (directory / "coverage.json").write_text(
             json.dumps(result["coverage"], ensure_ascii=False, indent=2), encoding="utf-8")
@@ -43,22 +47,23 @@ def save(result: dict, directory: Path) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Budgeted research baseline")
+    parser = argparse.ArgumentParser(description="Global evidence research agent")
     parser.add_argument("query", nargs="?")
-    parser.add_argument("--snapshot", type=Path, help="Offline replay JSON (uses demo policy)")
+    parser.add_argument("--snapshot", type=Path, help="Removed from production; use adra.legacy.cli for historical replay")
     parser.add_argument("--max-tools", type=int, default=6)
     parser.add_argument("--max-steps", type=int, default=10)
     parser.add_argument("--max-model-calls", type=int, default=32)
     parser.add_argument("--output", type=Path, default=Path("outputs"))
     parser.add_argument("--allowed-domain", action="append", default=[],
                         help="Allowed exact source hostname; repeat for multiple hosts")
-    parser.add_argument("--strategy", choices=["baseline", "static", "adaptive"], default="baseline")
-    parser.add_argument("--coverage-mode", choices=["sources", "semantic"], default="sources")
+    parser.add_argument("--strategy", choices=["research"], default="research")
+    parser.add_argument("--coverage-mode", choices=["none", "semantic"], default="semantic",
+                        help="Final report evaluation, never an online stopping rule")
     parser.add_argument("--coverage-replay", type=Path,
-                        help="Offline assessment map keyed by exact input hash")
+                        help="Historical replay only, rejected by this entry point")
     plans = parser.add_mutually_exclusive_group()
-    plans.add_argument("--plan", type=Path, help="Validated task DAG in JSON")
-    plans.add_argument("--auto-plan", action="store_true", help="Generate a task DAG online")
+    plans.add_argument("--plan", type=Path, help="Research brief JSON with scope, topics and acceptance criteria")
+    plans.add_argument("--auto-plan", action="store_true", help="Generate a research brief online (default without --plan)")
     args = parser.parse_args()
     try:
         allowed_domains = DomainPolicy(args.allowed_domain).domains
@@ -71,48 +76,31 @@ def main():
     directory = args.output / run_id
     try:
         budget = Budget(tool_calls=args.max_tools, steps=args.max_steps)
-        if args.coverage_mode == "semantic" and args.strategy == "baseline":
-            parser.error("Semantic coverage requires static/adaptive planning")
-        if args.coverage_replay and (not args.snapshot or args.coverage_mode != "semantic"):
-            parser.error("--coverage-replay requires snapshot mode and semantic coverage")
-        if args.snapshot and args.coverage_mode == "semantic" and not args.coverage_replay:
-            parser.error("Offline semantic coverage requires --coverage-replay")
-        if (args.strategy == "baseline") != (not (args.plan or args.auto_plan)):
-            parser.error("static/adaptive require --plan or --auto-plan; baseline accepts neither")
-        if args.auto_plan and (args.snapshot or min(budget.tool_calls, budget.steps) < 2):
-            parser.error("--auto-plan requires online mode and at least two tools/steps")
+        if args.snapshot or args.coverage_replay:
+            parser.error("Historical snapshots use python -m adra.evaluation; the research CLI is live")
         plan = Plan.model_validate_json(args.plan.read_text(encoding="utf-8")) if args.plan else None
-        if args.snapshot:
-            snapshot = json.loads(args.snapshot.read_text(encoding="utf-8"))
-            query = args.query or snapshot["query"]
-            policy, tools = DemoPolicy(), SnapshotTools(snapshot)
-            mode = "synthetic_replay"
-        else:
-            query = args.query
-            if not query:
-                parser.error("Provide a query or --snapshot")
-            model_name = os.environ.get("ADRA_MODEL")
-            key = os.environ.get("TAVILY_API_KEY")
-            if not model_name or not key:
-                parser.error("Live mode requires ADRA_MODEL and TAVILY_API_KEY; see README")
-            runtime = RuntimeConfig.from_env(args.max_model_calls)
-            policy, tools = runtime.create_policy(), TavilyTools(key, allowed_domains)
-            mode = "live"
+        query = args.query
+        if not query:
+            parser.error("Provide a research query")
+        model_name = os.environ.get("ADRA_MODEL")
+        key = os.environ.get("TAVILY_API_KEY")
+        if not model_name or not key:
+            parser.error("Live mode requires ADRA_MODEL and TAVILY_API_KEY; see README")
+        runtime = RuntimeConfig.from_env(args.max_model_calls)
+        policy, tools = runtime.create_policy(), TavilyTools(key, allowed_domains, include_raw_content=True)
+        mode = "live"
         if not query.strip():
             parser.error("Research query must not be empty")
-        if args.auto_plan:
-            plan = policy.generate_plan(query, budget, semantic_coverage=args.coverage_mode == "semantic")
-        if plan:
-            if query.strip() != plan.query.strip():
-                parser.error("Plan query must match the research query")
-            assessor = (ReplayAssessor(json.loads(args.coverage_replay.read_text(encoding="utf-8")))
-                        if args.coverage_replay else None)
-            policy = PlanningPolicy(plan, policy, args.strategy, args.coverage_mode, assessor)
-        result = run(query, policy, tools, budget, task_id=run_id, allowed_domains=allowed_domains)
+        if args.auto_plan or plan is None:
+            plan = policy.generate_brief(query, budget)
+        if query.strip() != plan.query.strip():
+            parser.error("Plan query must match the research query")
+        result = run(query, policy, tools, budget, task_id=run_id, allowed_domains=allowed_domains,
+                     plan=plan, evaluate=args.coverage_mode == "semantic")
         result["mode"] = mode
         result["strategy"] = args.strategy
         result["model"] = os.environ.get("ADRA_MODEL") if mode == "live" else None
-        result["plan_source"] = "generated" if args.auto_plan else "file" if args.plan else None
+        result["plan_source"] = "file" if args.plan else "generated"
         if runtime:
             result["runtime_config"] = runtime.model_dump()
         save(result, directory)

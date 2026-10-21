@@ -3,8 +3,8 @@
 import json
 
 from adra.coverage import Assessment
-from adra.graph import run
-from adra.planning import Plan, PlanningPolicy
+from adra.legacy.graph import run
+from adra.legacy.planning import Plan, PlanningPolicy
 from adra.policy import DemoPolicy, ModelPolicy
 from adra.state import Budget
 from adra.tools import SnapshotTools

@@ -49,10 +49,11 @@ class ReplayAssessor:
         return Assessment.model_validate(self.data[assessment_key(task, evidence)])
 
 
-def refresh_coverage(plan, assessor, state):
+def refresh_coverage(plan, assessor, state, evidence_by_task=None):
     coverage = {}
     for task in plan.tasks:
-        evidence = [e for e in state["evidence"] if e["read"] and task.id in e["task_ids"]]
+        evidence = (evidence_by_task[task.id] if evidence_by_task is not None else
+                    [e for e in state["evidence"] if e["read"] and task.id in e["task_ids"]])
         key = assessment_key(task, evidence)
         previous = state.get("coverage", {}).get(task.id)
         if previous and previous["input_sha256"] == key:
