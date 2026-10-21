@@ -123,3 +123,48 @@ def retrieve(evidence, documents, queries, char_budget=12000, top_k=4):
                        'selection_method': 'bm25_tf_v2', 'selected_length': len(content),
                        'truncated': sum(end - start for start, end in spans) < len(raw)})
     return output
+
+
+def handoff_evidence(evidence, documents, batches, char_budget=12000, queries=()):
+    """Round-robin exact passages across research steps; reject stale snapshots.
+
+    A bounded handoff cannot retain every passage. Keep whole passages rather
+    than cutting a previously discovered statement at a new chunk boundary.
+    """
+    sources = {e['id']: e for e in evidence if e['read']}
+    queues = [[(e, p) for e in batch for p in e['passages']] for batch in batches]
+    if queries:
+        candidates = list({(e['id'], e['raw_sha256'], p['start'], p['end']): (e, p)
+                           for queue in queues for e, p in queue}.values())
+        corpus = [tokenize(p['text']) for _, p in candidates]
+        queues = []
+        for query in queries:
+            scores = bm25_scores(corpus, tokenize(query))
+            queues.append([candidates[i] for i in sorted(range(len(candidates)),
+                           key=lambda i: -scores[i]) if scores[i] > 0])
+    selected = {}
+    for rank in range(max(map(len, queues), default=0)):
+        for queue in queues:
+            if rank >= len(queue):
+                continue
+            source, passage = queue[rank]
+            sid = source['id']
+            current = sources.get(sid)
+            if not current or current['raw_sha256'] != source['raw_sha256']:
+                continue
+            raw = documents[sid]['read']
+            a, b = passage['start'], passage['end']
+            if raw[a:b] != passage['text']:
+                continue
+            trial = {**selected, sid: merge_spans([*selected.get(sid, []), (a, b)])}
+            if sum(sum(b-a for a,b in spans) + 2*(len(spans)-1) for spans in trial.values()) <= char_budget:
+                selected = trial
+    output = []
+    for sid, spans in selected.items():
+        raw = documents[sid]['read']
+        passages = [{'start': a, 'end': b, 'text': raw[a:b]} for a,b in spans]
+        content = '\n\n'.join(p['text'] for p in passages)
+        output.append({**sources[sid], 'passages': passages, 'content': content,
+                       'selected_length': len(content), 'truncated': len(content) < len(raw),
+                       'selection_method': 'research_handoff_v2'})
+    return output

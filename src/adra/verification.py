@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from adra.coverage import Citation
+from adra.evaluation_retry import retryable
 from adra.evidence_store import retrieve
 
 
@@ -41,40 +42,52 @@ def validate_quotes(citations, evidence, documents):
     return output
 
 
-def verify_report(state, policy):
+def verify_report(state, policy, max_attempts=2):
     records = []
     for index, claim in enumerate(state['report']['claims']):
         record = {'claim_index': index, 'claim': claim, 'verdict': None, 'citations': []}
-        try:
-            allowed = [e for e in state['evidence'] if e['id'] in claim['evidence_ids']]
-            # Only the sources this claim actually cites may support it.
-            evidence = retrieve(allowed, state['raw_documents'], [claim['text']], char_budget=6000)
-            if not evidence:
-                # Cross-language lexical misses must still expose the writer's actual evidence.
-                remaining = 6000
-                evidence = []
-                for source in state.get('research_notes', {}).get('evidence', []):
-                    if source['id'] not in claim['evidence_ids']:
-                        continue
-                    passages = []
-                    for passage in source['passages']:
-                        text = passage['text'][:remaining]
-                        if text:
-                            passages.append({**passage, 'text': text, 'end': passage['start'] + len(text)})
-                            remaining -= len(text)
-                    if passages:
-                        evidence.append({**source, 'passages': passages, 'truncated': True})
-            if not evidence:
-                verdict = ClaimVerdict(verdict='insufficient', explanation='No retrieved read evidence in cited sources.')
-            else:
-                verdict = ClaimVerdict.model_validate(policy.verify_claim(claim, evidence))
-            if verdict.verdict in ('supported', 'contradicted') and not verdict.citations:
-                raise ValueError('Supported/contradicted verdict needs a source quote')
-            citations = validate_quotes(verdict.citations, evidence, state['raw_documents'])
-            record.update(verdict=verdict.verdict, explanation=verdict.explanation,
-                          citations=citations, validation='quotes_validated_model_judgment')
-        except Exception as exc:
-            record.update(validation='assessment_failed', error_type=type(exc).__name__)
+        attempts = []
+        for attempt in range(1, max_attempts + 1):
+            stage = 'evidence_selection'
+            try:
+                allowed = [e for e in state['evidence'] if e['id'] in claim['evidence_ids']]
+                # Only the sources this claim actually cites may support it.
+                evidence = retrieve(allowed, state['raw_documents'], [claim['text']], char_budget=6000)
+                if not evidence:
+                    # Cross-language lexical misses must still expose the writer's actual evidence.
+                    remaining = 6000
+                    evidence = []
+                    for source in state.get('research_notes', {}).get('evidence', []):
+                        if source['id'] not in claim['evidence_ids']:
+                            continue
+                        passages = []
+                        for passage in source['passages']:
+                            text = passage['text'][:remaining]
+                            if text:
+                                passages.append({**passage, 'text': text, 'end': passage['start'] + len(text)})
+                                remaining -= len(text)
+                        if passages:
+                            evidence.append({**source, 'passages': passages, 'truncated': True})
+                if not evidence:
+                    verdict = ClaimVerdict(verdict='insufficient', explanation='No retrieved read evidence in cited sources.')
+                else:
+                    stage = 'model_request'
+                    verdict = ClaimVerdict.model_validate(policy.verify_claim(claim, evidence))
+                stage = 'quote_validation'
+                if verdict.verdict in ('supported', 'contradicted') and not verdict.citations:
+                    raise ValueError('Supported/contradicted verdict needs a source quote')
+                citations = validate_quotes(verdict.citations, evidence, state['raw_documents'])
+                record.pop('error_type', None)
+                record.update(verdict=verdict.verdict, explanation=verdict.explanation,
+                              citations=citations, validation='quotes_validated_model_judgment')
+                attempts.append({'attempt': attempt, 'status': 'ok'})
+                break
+            except Exception as exc:
+                record.update(validation='assessment_failed', error_type=type(exc).__name__)
+                attempts.append({'attempt': attempt, 'status': 'failed', 'stage': stage, 'error_type': type(exc).__name__})
+                if not retryable(exc):
+                    break
+        record['attempts'] = attempts
         records.append(record)
     complete = all(r['validation'] != 'assessment_failed' for r in records)
     rates = {f'{verdict}_claim_rate': (sum(r['verdict'] == verdict for r in records) / len(records)

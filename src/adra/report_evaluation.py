@@ -1,6 +1,8 @@
 """Re-evaluate one saved report without searching, writing, or changing its artifacts."""
 import argparse
 import json
+import hashlib
+from adra.evaluation_retry import evaluation_identity
 from pathlib import Path
 
 from adra.configuration import RuntimeConfig
@@ -13,7 +15,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True, help='New evaluation JSON file')
-    parser.add_argument('--max-model-calls', type=int, default=8)
+    parser.add_argument('--max-model-calls', type=int, default=48)
+    parser.add_argument('--max-attempts', type=int, choices=range(1, 4), default=2)
     parser.add_argument('--verify-claims', action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
     if args.output.exists():
@@ -25,9 +28,12 @@ def main():
     config = RuntimeConfig.from_env(args.max_model_calls)
     policy = config.create_policy()
     # Never reuse judgments from a previous model or rubric run.
-    result = evaluate_report({**saved, 'coverage': {}}, plan, policy)
-    verification = verify_report(saved, policy) if args.verify_claims else {'status': 'not_requested'}
-    artifact = {'claim_verification': verification, 'source_run': str(args.run.resolve()), 'target': 'final_report',
+    result = evaluate_report({**saved, 'coverage': {}}, plan, policy, max_attempts=args.max_attempts)
+    verification = verify_report(saved, policy, max_attempts=args.max_attempts) if args.verify_claims else {'status': 'not_requested'}
+    artifact = {'evaluation_provenance': evaluation_identity(saved),
+                'source_run_sha256': hashlib.sha256(args.run.read_bytes()).hexdigest(),
+                'frozen_inputs': {k: saved.get(k) for k in ('report', 'plan', 'evidence', 'raw_documents')},
+                'max_attempts': args.max_attempts, 'claim_verification': verification, 'source_run': str(args.run.resolve()), 'target': 'final_report',
                 'status': result['evaluation_status'], 'coverage': result['coverage'],
                 'runtime_config': config.model_dump(), 'model_call_records': policy.call_records,
                 'total_tokens': policy.tokens, 'token_usage_complete': policy.usage_complete}

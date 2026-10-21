@@ -15,6 +15,7 @@ class ResearchOptions(BaseModel):
     max_reflections: int = Field(default=3, ge=0, le=20)
     history_window: int = Field(default=6, ge=1, le=30)
     verify_claims: bool = False
+    reflection_context: Literal['compact', 'full'] = 'compact'
 
 
 class GoalUpdate(BaseModel):

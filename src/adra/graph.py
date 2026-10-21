@@ -9,8 +9,9 @@ from copy import deepcopy
 from langgraph.graph import END, START, StateGraph
 
 from adra.coverage import refresh_coverage
+from adra.evaluation_retry import evaluation_identity
 from adra.domains import DomainPolicy
-from adra.evidence_store import add_source, retrieve
+from adra.evidence_store import add_source, retrieve, merge_spans, handoff_evidence
 from adra.policy import compact_evidence
 from adra.provenance import runtime_provenance
 from adra.research_models import ResearchDecision
@@ -28,7 +29,7 @@ def research_queries(query, plan):
             for c in t.criteria] or [t.description for t in plan.tasks]
 
 
-def evaluate_report(state, plan, policy):
+def evaluate_report(state, plan, policy, max_attempts=2):
     # Retrieve independently from the raw corpus for each rubric, only after writing.
     evidence_by_task = {
         t.id: retrieve(state['evidence'], state['raw_documents'],
@@ -38,10 +39,11 @@ def evaluate_report(state, plan, policy):
         def assess_coverage(self, task, evidence):
             return policy.assess_report(task, evidence, state['report'])
     coverage = refresh_coverage(plan, FinalJudge(), {**state, "coverage": {}},
-                                evidence_by_task=evidence_by_task)
+                                evidence_by_task=evidence_by_task, max_attempts=max_attempts)
     complete = all(r['validation'] in ('quotes_validated', 'no_read_evidence')
                    for r in coverage.values())
     return {**state, 'coverage': coverage,
+            'evaluation_provenance': evaluation_identity({**state, 'plan': plan.model_dump()}),
             'evaluation_status': 'completed' if complete else 'incomplete'}
 
 
@@ -57,7 +59,7 @@ def build_graph(policy, tools, budget, plan=None, allowed_domains=None, evaluate
         return {**state, 'brief': plan.model_dump() if plan else {'query': state['query']},
                 'retrieval_queries': research_queries(state['query'], plan),
                 'goals': initial_goals(plan), 'reflections': [], 'last_reflection_step': -1,
-                'decisions': [], 'seen_passages': []}
+                'decisions': [], 'seen_passages': [], 'evidence_memory': []}
 
     def context(state):
         notes = state.get('notes', [])
@@ -84,16 +86,28 @@ def build_graph(policy, tools, budget, plan=None, allowed_domains=None, evaluate
 
     def reflect(state):
         ctx = context(state)
+        reflection_evidence = state.get('notes', [])
+        if options.reflection_context == 'compact':
+            reflection_evidence = retrieve(state['evidence'], state['raw_documents'],
+                [g['description'] for g in state['goals'] if g['status'] != 'supported']
+                or state['retrieval_queries'], char_budget=6000)
+            ctx = {k: ctx[k] for k in ('query', 'remaining_tool_budget', 'remaining_steps')}
+            ctx.update(goals=[{k: g[k] for k in ('id', 'description', 'status', 'missing_facts')}
+                              for g in state['goals']],
+                       research_notes=compact_evidence(reflection_evidence),
+                       **bounded_history(state['transitions'], 3))
         reason = state.get('pending_reflection') or trigger(state)
         record = {'step': state['steps'], 'trigger': reason, 'context': ctx}
         goals = state['goals']
+        stage = 'model_request'
         try:
             result = ReflectionResult.model_validate(policy.reflect(ctx))
-            goals = update_goals(goals, result, state.get('notes', []),
+            stage = 'goal_quote_validation'
+            goals = update_goals(goals, result, reflection_evidence,
                                  state['raw_documents'], state['steps'])
             record.update(status='ok', result=result.model_dump())
         except Exception as exc:
-            record.update(status='failed', error_type=type(exc).__name__)
+            record.update(status='failed', stage=stage, error_type=type(exc).__name__)
         record['model_call_index'] = len(getattr(policy, 'call_records', [])) - 1
         return {**state, 'goals': goals, 'reflections': [*state['reflections'], record],
                 'last_reflection_step': state['steps'], 'pending_reflection': None}
@@ -184,23 +198,41 @@ def build_graph(policy, tools, budget, plan=None, allowed_domains=None, evaluate
         return state
 
     def retrieval(state):
-        queries = [state.get('focus', state['query']), *state['retrieval_queries']]
+        queries = list(dict.fromkeys([state['action']['argument']
+                   if state['action']['kind'] == 'RETRIEVE' else state.get('focus', state['query']),
+                   *state['retrieval_queries']]))
         notes = retrieve(state['evidence'], state['raw_documents'], queries)
         spans = [(e['id'], e['raw_sha256'], p['start'], p['end']) for e in notes for p in e['passages']]
         seen = {tuple(p) for p in state['seen_passages']}
         transitions = deepcopy(state['transitions'])
-        transitions[-1]['new_evidence'] |= bool(set(spans) - seen)
+        new_chars = 0
+        for sid, sha in {(p[0], p[1]) for p in spans}:
+            old = [(a, b) for i, h, a, b in seen if (i, h) == (sid, sha)]
+            fresh = [(a, b) for i, h, a, b in spans if (i, h) == (sid, sha)]
+            new_chars += sum(b-a for a,b in merge_spans(old + fresh)) - sum(b-a for a,b in merge_spans(old))
+        transitions[-1]['new_evidence'] |= new_chars > 0
+        transitions[-1]['observation'].update(retrieved_source_ids=[e['id'] for e in notes],
+            new_characters=new_chars, retrieval_queries=queries,
+            passage_count=sum(len(e['passages']) for e in notes))
         transitions[-1]['next_state_features'] = {
             'source_count': len(state['evidence']), 'read_source_count': sum(e['read'] for e in state['evidence']),
             'remaining_tools': budget.tool_calls - state['tool_calls'],
             'remaining_steps': budget.steps - state['steps']}
         return {**state, 'notes': notes, 'transitions': transitions,
                 'seen_passages': [list(p) for p in sorted(seen | set(spans))],
+                'evidence_memory': [*state['evidence_memory'], notes],
                 'goals': invalidate_stale_goals(state['goals'], state['evidence'])}
 
     def synthesize(state):
         # The final handoff covers every brief criterion, not only the last focus.
-        notes = retrieve(state['evidence'], state['raw_documents'], state['retrieval_queries'])
+        # Retain distinct action queries at synthesis, including routing/API queries.
+        action_queries = list(dict.fromkeys(t['action']['argument'] for t in state['transitions']
+                              if t['action']['kind'] == 'RETRIEVE' and 'error' not in t['observation']))
+        notes = retrieve(state['evidence'], state['raw_documents'],
+                         [*state['retrieval_queries'], *action_queries], top_k=4)
+        notes = handoff_evidence(state['evidence'], state['raw_documents'],
+                                 [*state['evidence_memory'], notes],
+                                 queries=[*state['retrieval_queries'], *action_queries])
         if not notes:
             report = Report(claims=[], limitations=['没有取得可引用的已读取原文，未生成事实性结论。'])
         else:
@@ -211,7 +243,7 @@ def build_graph(policy, tools, budget, plan=None, allowed_domains=None, evaluate
         if any(not c.evidence_ids or not set(c.evidence_ids) <= known for c in report.claims):
             raise ValueError('Report must cite retrieved read evidence')
         return {**state, 'report': report.model_dump(),
-                'research_notes': {'method': 'bm25_tf_v2', 'evidence': notes,
+                'research_notes': {'method': 'research_handoff_v2', 'evidence': notes,
                                    'limitations': 'Extractive retrieval; not a semantic verification.'}}
 
     def final_evaluation(state):
@@ -254,7 +286,7 @@ def run(query, policy, tools, budget=None, task_id='research', allowed_domains=N
         {'recursion_limit': budget.steps * 3 + options.max_reflections * 2 + 15})
     judgments = [j for r in result['coverage'].values() for j in r['judgments']]
     result['architecture'] = 'global_research_v2'
-    result['research_revision'] = 'evidence_reflection_v1'
+    result['research_revision'] = 'evidence_reflection_v2'
     result['config'] = {**budget.model_dump(), 'evaluation': evaluate, 'retrieval_method': 'bm25_tf_v2',
                         'research_options': options.model_dump(),
                         'allowed_domains': list(allowed_domains or getattr(tools, 'allowed_domains', ()))}

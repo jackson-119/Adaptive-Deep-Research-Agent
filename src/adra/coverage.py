@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from adra.evaluation_retry import retryable
 
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
@@ -49,7 +50,7 @@ class ReplayAssessor:
         return Assessment.model_validate(self.data[assessment_key(task, evidence)])
 
 
-def refresh_coverage(plan, assessor, state, evidence_by_task=None):
+def refresh_coverage(plan, assessor, state, evidence_by_task=None, max_attempts=1):
     coverage = {}
     for task in plan.tasks:
         evidence = (evidence_by_task[task.id] if evidence_by_task is not None else
@@ -64,43 +65,54 @@ def refresh_coverage(plan, assessor, state, evidence_by_task=None):
                    for c in task.criteria]
         record = {"input_sha256": key, "judgments": missing, "validation": "no_read_evidence"}
         if evidence:
-            try:
-                assessment = assessor.assess_coverage(task, evidence)
-                assessment = Assessment.model_validate(assessment.model_dump())
-                ids = [j.criterion_id for j in assessment.judgments]
-                if len(ids) != len(set(ids)) or set(ids) != {c.id for c in task.criteria}:
-                    raise ValueError("Assessment must cover exactly the task criteria")
-                sources = {e["id"]: e for e in evidence}
-                judgments = []
-                for judgment in assessment.judgments:
-                    if ((judgment.status == "missing" and judgment.citations) or
-                            (judgment.status != "missing" and not judgment.citations)):
-                        raise ValueError("Support judgments require citations; missing has none")
-                    citations = []
-                    for citation in judgment.citations:
-                        source = sources[citation.evidence_id]
-                        raw = state["raw_documents"][source["id"]]["read"]
-                        location = None
-                        for passage in source["passages"]:
-                            if raw[passage["start"]:passage["end"]] != passage["text"]:
-                                raise ValueError("Passage does not match original text")
-                            offset = passage["text"].find(citation.quote)
-                            if offset >= 0:
-                                location = passage["start"] + offset
-                                break
-                        if location is None:
-                            raise ValueError("Quote must exist within one selected passage")
-                        citations.append({**citation.model_dump(), "start": location,
-                                          "end": location + len(citation.quote),
-                                          "raw_sha256": source["raw_sha256"]})
-                    description = next(c.description for c in task.criteria
-                                       if c.id == judgment.criterion_id)
-                    judgments.append({**judgment.model_dump(), "description": description,
-                                      "citations": citations})
-                record.update(judgments=judgments, validation="quotes_validated")
-            except Exception as exc:
-                # Fail closed, preserve only safe error type, and cache until evidence changes.
-                record.update(validation="assessment_failed", error_type=type(exc).__name__)
+            attempts = []
+            for attempt in range(1, max_attempts + 1):
+                stage = 'model_request'
+                try:
+                    assessment = assessor.assess_coverage(task, evidence)
+                    assessment = Assessment.model_validate(assessment.model_dump())
+                    stage = 'response_validation'
+                    ids = [j.criterion_id for j in assessment.judgments]
+                    if len(ids) != len(set(ids)) or set(ids) != {c.id for c in task.criteria}:
+                        raise ValueError("Assessment must cover exactly the task criteria")
+                    sources = {e["id"]: e for e in evidence}
+                    judgments = []
+                    for judgment in assessment.judgments:
+                        if ((judgment.status == "missing" and judgment.citations) or
+                                (judgment.status != "missing" and not judgment.citations)):
+                            raise ValueError("Support judgments require citations; missing has none")
+                        citations = []
+                        for citation in judgment.citations:
+                            source = sources[citation.evidence_id]
+                            raw = state["raw_documents"][source["id"]]["read"]
+                            location = None
+                            for passage in source["passages"]:
+                                if raw[passage["start"]:passage["end"]] != passage["text"]:
+                                    raise ValueError("Passage does not match original text")
+                                offset = passage["text"].find(citation.quote)
+                                if offset >= 0:
+                                    location = passage["start"] + offset
+                                    break
+                            if location is None:
+                                raise ValueError("Quote must exist within one selected passage")
+                            citations.append({**citation.model_dump(), "start": location,
+                                              "end": location + len(citation.quote),
+                                              "raw_sha256": source["raw_sha256"]})
+                        description = next(c.description for c in task.criteria
+                                           if c.id == judgment.criterion_id)
+                        judgments.append({**judgment.model_dump(), "description": description,
+                                          "citations": citations})
+                    record.pop("error_type", None)
+                    record.update(judgments=judgments, validation="quotes_validated")
+                    attempts.append({"attempt": attempt, "status": "ok"})
+                    break
+                except Exception as exc:
+                    # Fail closed, preserve only safe error type, and cache until evidence changes.
+                    record.update(validation="assessment_failed", error_type=type(exc).__name__)
+                    attempts.append({"attempt": attempt, "status": "failed", "stage": stage, "error_type": type(exc).__name__})
+                    if not retryable(exc):
+                        break
+            record["attempts"] = attempts
         coverage[task.id] = record
     return coverage
 

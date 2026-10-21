@@ -42,9 +42,10 @@ def build_command(case, mode, plan_path, output, budget, max_model_calls, varian
     command = [sys.executable, "-m", "adra.cli", case["plan_data"]["query"],
                "--plan", str(plan_path), "--strategy", "research",
                "--coverage-mode", mode, "--reflection-mode",
-               {"baseline": "off", "event": "event", "always": "always"}[variant], "--max-tools", str(budget.tool_calls),
+               {"baseline": "off", "event": "event", "always": "always", "event-full": "event"}[variant], "--max-tools", str(budget.tool_calls),
                "--max-steps", str(budget.steps), "--max-model-calls", str(max_model_calls),
                "--output", str(output)]
+    command.extend(["--reflection-context", "full" if variant == "event-full" else "compact"])
     for domain in case["allowed_domains"]:
         command.extend(["--allowed-domain", domain])
     return command
@@ -70,7 +71,7 @@ def main():
     parser.add_argument("--manifest", type=Path, default=Path("data/live-eval/manifest.json"))
     parser.add_argument("--cases", nargs="+", default=[
         "langgraph-state-routing", "python-asyncio", "pydantic-validation"])
-    parser.add_argument("--variants", nargs="+", choices=["baseline", "event", "always"], default=["event"])
+    parser.add_argument("--variants", nargs="+", choices=["baseline", "event", "always", "event-full"], default=["event"])
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--max-tools", type=int, default=8)
     parser.add_argument("--max-steps", type=int, default=12)

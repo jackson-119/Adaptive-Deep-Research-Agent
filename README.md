@@ -170,3 +170,32 @@ uv run --locked python -m adra.legacy.cli --snapshot data/demo.json
 ```
 
 `adra.legacy` 不被新生产图导入；保留历史实验代码仅用于验证旧结果和建立对照，旧在线命令不再是推荐路径。
+
+### 评估失败重试与反思上下文对照
+
+生产覆盖评估按子任务、声明核验按声明独立尝试，默认最多两次。只重试无效输出、引用校验失败及部分暂时性请求错误；已完成的低分不会重试，认证失败和模型预算耗尽不重试。所有尝试保留 `attempts`（错误类型、阶段），失败仍计为未完成，不能当作零分。
+
+已有 `run.json` 可以独立重评，不重新搜索或改写报告：
+
+```bash
+UV_HTTP_TIMEOUT=300 uv run --locked --extra live python -m adra.report_evaluation \
+  --run outputs/你的运行目录/run.json \
+  --output outputs/reevaluation-v2.json \
+  --max-model-calls 48 --max-attempts 2
+```
+
+新文件保存原始输入快照、原运行文件 SHA256、评分版本、模型配置和尝试记录；输出已存在会拒绝覆盖。重评会对全部标准与声明重新评分，不挑选历史最高分。版本或模型变化后的分数应分别报告，并给 Baseline/Event 使用相同设置。48 次只是调用上限，仍可能不足，必须检查覆盖评估和声明核验两项状态。
+
+默认反思使用 `--reflection-context compact`：原验收目标、当前缺口、最近三步、剩余预算和最多 6000 字符的证据正文；`full` 保留完整研究上下文作为对照。压缩可能丢失上下文，收益尚需真实实验验证。
+
+先预览三个任务、每组重复三次的实验（默认不调用 API）：
+
+```bash
+uv run --locked --extra live python -m adra.live_evaluation \
+  --cases langgraph-state-routing python-asyncio pydantic-validation \
+  --variants baseline event event-full --repeat 3 --max-model-calls 48
+```
+
+确认预算后追加 `--execute`，共 27 次真实研究运行；只比较 Baseline/Event 则移除 `event-full`，共 18 次。`event` 是压缩反思，`event-full` 是完整上下文反思。来源数量、单次高分及未完成评分均不能证明算法收益。
+
+本轮同时修正 RETRIEVE 查询参数优先级，以区间并集计算新增证据字符，并按原始标准及行动查询在历史完整片段间分配最终交接预算。交接仍有 12000 字符上限，并不保证保留全部证据。研究阶段不使用最终评分调度动作。

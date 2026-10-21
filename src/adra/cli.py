@@ -70,6 +70,7 @@ def main():
     parser.add_argument("--max-model-calls", type=int, default=32)
     parser.add_argument("--reflection-mode", choices=["off", "event", "always"], default="event")
     parser.add_argument("--max-reflections", type=int, default=3)
+    parser.add_argument("--reflection-context", choices=["compact", "full"], default="compact")
     parser.add_argument("--history-window", type=int, default=6)
     parser.add_argument("--verify-claims", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--output", type=Path, default=Path("outputs"))
@@ -96,7 +97,8 @@ def main():
     try:
         budget = Budget(tool_calls=args.max_tools, steps=args.max_steps)
         options = ResearchOptions(reflection_mode=args.reflection_mode, max_reflections=args.max_reflections,
-                                  history_window=args.history_window, verify_claims=args.verify_claims)
+                                  history_window=args.history_window, verify_claims=args.verify_claims,
+                                  reflection_context=args.reflection_context)
         if args.snapshot or args.coverage_replay:
             parser.error("Historical snapshots use python -m adra.evaluation; the research CLI is live")
         plan = Plan.model_validate_json(args.plan.read_text(encoding="utf-8")) if args.plan else None
