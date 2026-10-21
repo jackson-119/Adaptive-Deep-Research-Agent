@@ -6,7 +6,8 @@ from pathlib import Path
 from uuid import uuid4
 
 from adra.graph import run
-from adra.policy import DemoPolicy, ModelPolicy
+from adra.policy import DemoPolicy
+from adra.configuration import RuntimeConfig
 from adra.planning import Plan, PlanningPolicy
 from adra.state import Budget
 from adra.tools import SnapshotTools, TavilyTools
@@ -36,6 +37,9 @@ def save(result: dict, directory: Path) -> None:
     if result.get("coverage"):
         (directory / "coverage.json").write_text(
             json.dumps(result["coverage"], ensure_ascii=False, indent=2), encoding="utf-8")
+    if "research_notes" in result:
+        (directory / "research_notes.json").write_text(
+            json.dumps(result["research_notes"], ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def main():
@@ -44,6 +48,7 @@ def main():
     parser.add_argument("--snapshot", type=Path, help="Offline replay JSON (uses demo policy)")
     parser.add_argument("--max-tools", type=int, default=6)
     parser.add_argument("--max-steps", type=int, default=10)
+    parser.add_argument("--max-model-calls", type=int, default=32)
     parser.add_argument("--output", type=Path, default=Path("outputs"))
     parser.add_argument("--allowed-domain", action="append", default=[],
                         help="Allowed exact source hostname; repeat for multiple hosts")
@@ -60,7 +65,10 @@ def main():
     except ValueError as exc:
         parser.error(str(exc))
     policy = None
-    directory = None
+    plan = None
+    runtime = None
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:8]
+    directory = args.output / run_id
     try:
         budget = Budget(tool_calls=args.max_tools, steps=args.max_steps)
         if args.coverage_mode == "semantic" and args.strategy == "baseline":
@@ -87,15 +95,11 @@ def main():
             key = os.environ.get("TAVILY_API_KEY")
             if not model_name or not key:
                 parser.error("Live mode requires ADRA_MODEL and TAVILY_API_KEY; see README")
-            from langchain.chat_models import init_chat_model
-            model = init_chat_model(model_name, temperature=0, max_tokens=2048,
-                                    timeout=60, max_retries=0)
-            policy, tools = ModelPolicy(model), TavilyTools(key, allowed_domains)
+            runtime = RuntimeConfig.from_env(args.max_model_calls)
+            policy, tools = runtime.create_policy(), TavilyTools(key, allowed_domains)
             mode = "live"
         if not query.strip():
             parser.error("Research query must not be empty")
-        run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:8]
-        directory = args.output / run_id
         if args.auto_plan:
             plan = policy.generate_plan(query, budget, semantic_coverage=args.coverage_mode == "semantic")
         if plan:
@@ -109,9 +113,11 @@ def main():
         result["strategy"] = args.strategy
         result["model"] = os.environ.get("ADRA_MODEL") if mode == "live" else None
         result["plan_source"] = "generated" if args.auto_plan else "file" if args.plan else None
+        if runtime:
+            result["runtime_config"] = runtime.model_dump()
         save(result, directory)
     except Exception as exc:
-        if args.auto_plan and directory is not None:
+        if directory is not None:
             directory.mkdir(parents=True, exist_ok=True)
             failure = {"status": "failed", "error_type": type(exc).__name__,
                        "allowed_domains": list(allowed_domains),
@@ -120,6 +126,8 @@ def main():
                        "model_call_records": getattr(policy, "call_records", []),
                        "total_tokens": getattr(policy, "tokens", None),
                        "token_usage_complete": getattr(policy, "usage_complete", False)}
+            if runtime:
+                failure["runtime_config"] = runtime.model_dump()
             if plan is not None:
                 failure["plan"] = plan.model_dump()
             (directory / "failure.json").write_text(

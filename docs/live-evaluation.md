@@ -14,6 +14,12 @@ LangGraph 固定计划为六个标准补充了可选 retrieval_terms，并启用
 重点检查 t1 的 persistence 备用查询是否提前执行、拒绝的来源数量、每项支持引文和总 token，
 不要把路径过滤后来源变少误判为功能退化，也不要把提示词修改视为已完成独立质量校准。
 
+当前工作区进一步参考外部实现引入研究轮次和抽取式笔记交付，见 [架构依据](architecture.md)。
+复测请另用 `outputs/langgraph-fixed-8-v4/$mode`，并检查 `research_notes.json`。
+可直接运行 `python -m adra.live_evaluation` 预览批次，追加 `--execute` 才实际调用服务。
+这轮不修改固定计划，可比较搜索后是否有后续阅读，以及报告是否仍混入未核实搜索摘要；
+报告更短不自动代表更好，必须核查是否遗漏已读且重要的信息。
+
 ## 1. 准备
 
 在云服务器同步当前代码和 `data/live-eval/`，在项目根目录执行下面的命令。沿用已经成功运行的 DeepSeek、Tavily 环境变量和 provider 依赖；`.env` 不会自动加载。先执行：

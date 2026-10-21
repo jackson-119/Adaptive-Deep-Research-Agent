@@ -94,6 +94,10 @@ class PlanningPolicy:
         return getattr(self.writer, "model_calls", 0)
 
     @property
+    def budget_exhausted(self):
+        return getattr(self.writer, "budget_exhausted", False)
+
+    @property
     def call_records(self):
         return getattr(self.writer, "call_records", [])
 
@@ -103,6 +107,16 @@ class PlanningPolicy:
 
     def describe(self, state: dict) -> dict:
         attempted = {(a["kind"], a["argument"]) for a in state.get("attempted_actions", [])}
+        # Adapt the bounded research-unit pattern: consume one successful search
+        # result before returning control to task scheduling. No hidden tool calls.
+        last = next(iter(state.get("transitions", [])[-1:]), {})
+        last_action = last.get("action", {})
+        observation = last.get("observation", {})
+        followup_task = (last_action.get("task_id")
+                         if self.strategy == "adaptive" and self.coverage_mode == "semantic"
+                         and last_action.get("kind") == "SEARCH" and "error" not in observation
+                         else None)
+        followup_ids = set(observation.get("source_ids", observation.get("added_ids", [])))
         summaries = []
         candidates = []
         completed = set()
@@ -158,6 +172,10 @@ class PlanningPolicy:
                         selection_reason = "gap_query"
                 if unread:
                     selection_reason = "gap_source"
+                followups = [e for e in remaining if e["id"] in followup_ids]
+                if task.id == followup_task and followups:
+                    unread = max(followups, key=lambda e: relevance(e["title"] + " " + e["content"]))
+                    selection_reason = "research_round_read"
             if unread:
                 action = Action(kind="READ", argument=unread["url"], task_id=task.id)
                 estimated_cost = 1
@@ -184,7 +202,10 @@ class PlanningPolicy:
         # Semantic gaps can persist after many reads. Balance attempts across
         # eligible tasks before applying the cost score, rather than starving
         # an unstarted task behind an endless queue of cheaper reads.
-        if self.strategy == "adaptive" and self.coverage_mode == "semantic" and affordable:
+        continuation = [c for c in affordable if c["selection_reason"] == "research_round_read"]
+        if continuation:
+            affordable = continuation
+        elif self.strategy == "adaptive" and self.coverage_mode == "semantic" and affordable:
             attempts = state.get("attempted_actions", [])
             counts = {t.id: sum(a.get("task_id") == t.id and a["kind"] != "STOP"
                                 for a in attempts) for t in self.plan.tasks}
@@ -197,7 +218,7 @@ class PlanningPolicy:
         return {"strategy": self.strategy, "coverage_mode": self.coverage_mode,
                 "tasks": summaries, "candidates": candidates,
                 "selected": chosen,
-                "scheduling_rule": ("balanced_attempts_then_score"
+                "scheduling_rule": ("research_round_then_balanced_attempts"
                                     if self.strategy == "adaptive" and self.coverage_mode == "semantic"
                                     else "score" if self.strategy == "adaptive" else "plan_order"),
                 "stop_reason": ("" if chosen else "plan_covered" if len(completed)
@@ -210,7 +231,9 @@ class PlanningPolicy:
     def write(self, state: dict):
         report = self.writer.write({**state, "research_scope": {
             "tasks": [t.description for t in self.plan.tasks],
-            "allowed_url_prefixes": self.plan.allowed_url_prefixes}})
+            "allowed_url_prefixes": self.plan.allowed_url_prefixes},
+            "report_evidence_mode": "validated_quotes" if self.coverage_mode == "semantic"
+            else "selected_passages"})
         pending = [t["task_id"] for t in self.describe(state)["tasks"] if t["status"] != "covered"]
         if pending:
             label = "未满足验收要点的子任务：" if self.coverage_mode == "semantic" else "未达到来源阅读目标的子任务："

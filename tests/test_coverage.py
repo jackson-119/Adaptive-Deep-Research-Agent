@@ -141,8 +141,10 @@ def test_model_assessment_cost_recorded(case):
     plan, snapshot = case
     result = run(plan.query, PlanningPolicy(plan, writer, 'adaptive', 'semantic'),
                  SnapshotTools(snapshot), Budget(tool_calls=2))
-    assert [r['phase'] for r in result['model_call_records']] == ['coverage', 'writing']
-    assert result['metrics']['total_tokens'] == 14
+    # With no validated evidence, produce an explicit empty report locally.
+    assert [r['phase'] for r in result['model_call_records']] == ['coverage']
+    assert result['metrics']['total_tokens'] == 7
+    assert result['report']['claims'] == []
 
 
 def test_duplicate_criteria_rejected(case):

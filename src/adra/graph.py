@@ -9,7 +9,7 @@ from adra.tools import ResearchTools, canonical_url
 from adra.domains import DomainPolicy, SourceDomainError
 from adra.provenance import runtime_provenance
 from adra.passages import CONTENT_LIMIT, select_passages
-from adra.coverage import refresh_coverage
+from adra.coverage import refresh_coverage, research_notes
 
 
 def view(state: dict, budget: Budget) -> dict:
@@ -53,7 +53,8 @@ def build_graph(policy: Policy, tools: ResearchTools, budget: Budget, allowed_do
 
     def decide(state):
         coverage = state.get("coverage", {})
-        if getattr(policy, "coverage_mode", "sources") == "semantic":
+        if (getattr(policy, "coverage_mode", "sources") == "semantic"
+                and not getattr(policy, "budget_exhausted", False)):
             coverage = refresh_coverage(policy.plan, policy.assessor, state)
         state = {**state, "coverage": coverage}
         reason = ""
@@ -61,6 +62,8 @@ def build_graph(policy: Policy, tools: ResearchTools, budget: Budget, allowed_do
             reason = "step_budget"
         elif state["tool_calls"] >= budget.tool_calls:
             reason = "tool_budget"
+        elif getattr(policy, "budget_exhausted", False):
+            reason = "model_budget"
         context = view(state, budget)
         planning = policy.describe(context) if hasattr(policy, "describe") else {}
         action = Action(kind="STOP") if reason else policy.decide(context)
@@ -91,6 +94,7 @@ def build_graph(policy: Policy, tools: ResearchTools, budget: Budget, allowed_do
                 results = tools.search(action.argument)
                 known = {e["url"] for e in evidence}
                 added = []
+                source_ids = []
                 rejected = 0
                 for result in results[:5]:
                     if not domains.allows(result.get("url", "")):
@@ -100,6 +104,7 @@ def build_graph(policy: Policy, tools: ResearchTools, budget: Budget, allowed_do
                     content = result.get("content", "")
                     if url in known:
                         item = next(e for e in evidence if e["url"] == url)
+                        source_ids.append(item["id"])
                         if action.task_id and action.task_id not in item["task_ids"]:
                             item["task_ids"].append(action.task_id)
                             select(item, raw_documents[item["id"]][item["raw_kind"]], state["query"])
@@ -114,8 +119,10 @@ def build_graph(policy: Policy, tools: ResearchTools, budget: Budget, allowed_do
                     raw_documents[item.id] = {"search": content}
                     evidence.append(data)
                     added.append(item.id)
+                    source_ids.append(item.id)
                     known.add(url)
                 observation = {"added_ids": added, "new_evidence": len(added),
+                               "source_ids": list(dict.fromkeys(source_ids)),
                                "rejected_sources": rejected}
             elif action.kind == "READ":
                 url = canonical_url(action.argument)
@@ -221,6 +228,7 @@ def run(query: str, policy: Policy, tools: ResearchTools,
             t["source_coverage_proxy"] for t in tasks) / len(tasks)
         result["metrics"]["covered_tasks"] = sum(t["status"] == "covered" for t in tasks)
         if getattr(policy, "coverage_mode", "sources") == "semantic":
+            result["research_notes"] = research_notes(result)
             judgments = [j for record in result["coverage"].values() for j in record["judgments"]]
             result["metrics"]["semantic_coverage"] = sum(j["status"] == "supported"
                                                         for j in judgments) / len(judgments)

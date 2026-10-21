@@ -102,3 +102,39 @@ def refresh_coverage(plan, assessor, state):
                 record.update(validation="assessment_failed", error_type=type(exc).__name__)
         coverage[task.id] = record
     return coverage
+
+
+def research_notes(state):
+    """Extractive handoff: validated quotations only, without another model call.
+
+    This is evidence compression, not independent semantic verification. Keep
+    partial/missing judgments so the writer cannot mistake notes for completion.
+    """
+    sources = {e["id"]: e for e in state["evidence"]}
+    selected = {}
+    checks = []
+    for task_id, record in state.get("coverage", {}).items():
+        for judgment in record["judgments"]:
+            checks.append({"task_id": task_id, **{
+                k: judgment[k] for k in ("criterion_id", "description", "status", "reason")
+                if k in judgment}})
+            if record.get("validation") != "quotes_validated":
+                continue
+            for citation in judgment.get("citations", []):
+                source = sources.get(citation["evidence_id"])
+                if not source or not source["read"]:
+                    continue
+                start, end = citation["start"], citation["end"]
+                if (citation["raw_sha256"] != source["raw_sha256"] or
+                        not any(p["start"] <= start < end <= p["end"] and
+                                p["text"][start - p["start"]:end - p["start"]] == citation["quote"]
+                                for p in source["passages"])):
+                    continue
+                entry = selected.setdefault(source["id"], {
+                    k: source[k] for k in ("id", "title", "url", "read", "raw_sha256")})
+                passages = entry.setdefault("passages", [])
+                passage = {"start": start, "end": end, "text": citation["quote"]}
+                if passage not in passages:
+                    passages.append(passage)
+    return {"method": "validated_quotes_v1", "evidence": list(selected.values()),
+            "acceptance_checks": checks}
