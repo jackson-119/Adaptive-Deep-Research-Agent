@@ -1,0 +1,184 @@
+{
+  "scope": "User-supplied cloud runs; one case, one run per variant. Selected metadata only; full runs are not bundled.",
+  "runs": [
+    {
+      "variant": "baseline",
+      "task_id": "20261021T120343Z-1caccff8",
+      "query": "根据官方文档，说明 LangGraph 的状态管理与条件路由机制",
+      "architecture": "global_research_v2",
+      "research_revision": "evidence_reflection_v2",
+      "config": {
+        "tool_calls": 8,
+        "steps": 12,
+        "evaluation": true,
+        "retrieval_method": "bm25_tf_v2",
+        "research_options": {
+          "reflection_mode": "off",
+          "max_reflections": 3,
+          "history_window": 6,
+          "verify_claims": true,
+          "reflection_context": "compact"
+        },
+        "allowed_domains": [
+          "docs.langchain.com",
+          "reference.langchain.com"
+        ]
+      },
+      "runtime_config": {
+        "model": "deepseek:deepseek-chat",
+        "planning_model": "deepseek:deepseek-chat",
+        "coverage_model": "deepseek:deepseek-chat",
+        "writing_model": "deepseek:deepseek-chat",
+        "reflection_model": null,
+        "verification_model": null,
+        "max_model_calls": 32,
+        "max_output_tokens": 2048,
+        "timeout_seconds": 60
+      },
+      "provenance": {
+        "python": "3.12.15",
+        "packages": {
+          "adaptive-deep-research-agent": "0.1.0",
+          "langgraph": "1.2.15",
+          "pydantic": "2.14.1",
+          "langchain": "1.4.5",
+          "langchain-deepseek": "1.1.1",
+          "langchain-anthropic": "1.7.6"
+        },
+        "git_commit": "8a21af210116f5d6342340bfc5b087094e0a4d81",
+        "git_dirty": false
+      },
+      "evaluation_provenance": {
+        "version": "final_report_retry_v2",
+        "input_sha256": "8d05af5a7461e0ffdae9affd11d100113ca518e9261d1d60c1dd852c1414c150",
+        "report_sha256": "f5bf982ccb853a808b3320358f035d50c77818bd72761e93892b3d9e44972ef6"
+      },
+      "metrics": {
+        "tool_calls": 3,
+        "steps": 6,
+        "source_count": 11,
+        "read_source_count": 11,
+        "tool_errors": 0,
+        "rejected_sources": 4,
+        "latency_seconds": 71.9034436000511,
+        "total_tokens": 83875,
+        "token_usage_complete": true,
+        "model_calls": 21,
+        "citation_reference_validity": 1.0,
+        "citation_support": 0.8181818181818182,
+        "task_quality": null,
+        "claim_verification_status": "completed",
+        "supported_claim_rate": 0.8181818181818182,
+        "contradicted_claim_rate": 0.0,
+        "insufficient_claim_rate": 0.18181818181818182,
+        "tool_attempts": 3,
+        "tool_requests_sent": 3,
+        "tool_successes": 3,
+        "tool_rejections": 0,
+        "reflection_calls": 0,
+        "external_tool_errors": 0,
+        "reflection_failures": 0,
+        "semantic_coverage": 0.5,
+        "evaluation_status": "completed",
+        "coverage_assessment_failures": 0,
+        "phase_tokens": {
+          "decision": 47828,
+          "verification": 21666,
+          "coverage": 8856,
+          "writing": 5525
+        }
+      },
+      "stop_reason": "researcher_complete"
+    },
+    {
+      "variant": "event",
+      "task_id": "20261021T120457Z-6b057c3a",
+      "query": "根据官方文档，说明 LangGraph 的状态管理与条件路由机制",
+      "architecture": "global_research_v2",
+      "research_revision": "evidence_reflection_v2",
+      "config": {
+        "tool_calls": 8,
+        "steps": 12,
+        "evaluation": true,
+        "retrieval_method": "bm25_tf_v2",
+        "research_options": {
+          "reflection_mode": "event",
+          "max_reflections": 3,
+          "history_window": 6,
+          "verify_claims": true,
+          "reflection_context": "compact"
+        },
+        "allowed_domains": [
+          "docs.langchain.com",
+          "reference.langchain.com"
+        ]
+      },
+      "runtime_config": {
+        "model": "deepseek:deepseek-chat",
+        "planning_model": "deepseek:deepseek-chat",
+        "coverage_model": "deepseek:deepseek-chat",
+        "writing_model": "deepseek:deepseek-chat",
+        "reflection_model": null,
+        "verification_model": null,
+        "max_model_calls": 32,
+        "max_output_tokens": 2048,
+        "timeout_seconds": 60
+      },
+      "provenance": {
+        "python": "3.12.15",
+        "packages": {
+          "adaptive-deep-research-agent": "0.1.0",
+          "langgraph": "1.2.15",
+          "pydantic": "2.14.1",
+          "langchain": "1.4.5",
+          "langchain-deepseek": "1.1.1",
+          "langchain-anthropic": "1.7.6"
+        },
+        "git_commit": "8a21af210116f5d6342340bfc5b087094e0a4d81",
+        "git_dirty": false
+      },
+      "evaluation_provenance": {
+        "version": "final_report_retry_v2",
+        "input_sha256": "fba94595623d7198949114132a96028f8567aa663bdcc7a39384674f7c141e26",
+        "report_sha256": "1d7c92069f826385e3159150930d6909086b96d26e1f9e3bffcd0bd4933106f2"
+      },
+      "metrics": {
+        "tool_calls": 3,
+        "steps": 12,
+        "source_count": 10,
+        "read_source_count": 10,
+        "tool_errors": 1,
+        "rejected_sources": 1,
+        "latency_seconds": 117.56532995007001,
+        "total_tokens": 163493,
+        "token_usage_complete": true,
+        "model_calls": 31,
+        "citation_reference_validity": 1.0,
+        "citation_support": 0.9333333333333333,
+        "task_quality": null,
+        "claim_verification_status": "completed",
+        "supported_claim_rate": 0.9333333333333333,
+        "contradicted_claim_rate": 0.0,
+        "insufficient_claim_rate": 0.06666666666666667,
+        "tool_attempts": 4,
+        "tool_requests_sent": 3,
+        "tool_successes": 3,
+        "tool_rejections": 1,
+        "reflection_calls": 1,
+        "external_tool_errors": 0,
+        "reflection_failures": 0,
+        "semantic_coverage": 0.5,
+        "evaluation_status": "completed",
+        "coverage_assessment_failures": 0,
+        "phase_tokens": {
+          "reflection": 4875,
+          "verification": 31716,
+          "writing": 5599,
+          "coverage": 9152,
+          "decision": 112151
+        }
+      },
+      "stop_reason": "step_budget"
+    }
+  ]
+}

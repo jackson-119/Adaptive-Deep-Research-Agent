@@ -42,3 +42,13 @@ score(q,d) = sum(idf(t) * tf(t,d) * (k1+1)
 - 持久化恢复与并行研究：后续工程工作。
 
 本轮测试验证实现约束，不提供新的在线质量结果；消融收益必须由真实实验和人工复核确认。
+
+## 生产入口迁移
+
+当前正式入口是 `adra.cli → adra.graph`，整体架构标记为 `global_research_v2`。旧静态/自适应任务轮转、按 URL 数量停止和每次阅读后全量评分已退出在线主链路；实现隔离于 `adra.legacy`，仅供历史合成实验复现：
+
+```sh
+uv run --locked python -m adra.legacy.cli --snapshot data/demo.json
+```
+
+旧 `--strategy adaptive/static/baseline` 与 `--coverage-mode sources` 不被新研究 CLI 接受；批次中的 baseline 表示当前相同研究链路关闭反思。组件版本见 [架构文档](architecture.md)，新旧指标定义不能直接比较。
