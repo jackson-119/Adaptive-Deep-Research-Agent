@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -12,6 +13,7 @@ from uuid import uuid4
 from adra.domains import DomainPolicy
 from adra.planning import Plan
 from adra.state import Budget
+from adra.experiment_summary import aggregate
 
 
 def prepare_cases(manifest: Path, selected):
@@ -36,10 +38,11 @@ def prepare_cases(manifest: Path, selected):
     return output
 
 
-def build_command(case, mode, plan_path, output, budget, max_model_calls):
+def build_command(case, mode, plan_path, output, budget, max_model_calls, variant="event"):
     command = [sys.executable, "-m", "adra.cli", case["plan_data"]["query"],
                "--plan", str(plan_path), "--strategy", "research",
-               "--coverage-mode", mode, "--max-tools", str(budget.tool_calls),
+               "--coverage-mode", mode, "--reflection-mode",
+               {"baseline": "off", "event": "event", "always": "always"}[variant], "--max-tools", str(budget.tool_calls),
                "--max-steps", str(budget.steps), "--max-model-calls", str(max_model_calls),
                "--output", str(output)]
     for domain in case["allowed_domains"]:
@@ -67,6 +70,7 @@ def main():
     parser.add_argument("--manifest", type=Path, default=Path("data/live-eval/manifest.json"))
     parser.add_argument("--cases", nargs="+", default=[
         "langgraph-state-routing", "python-asyncio", "pydantic-validation"])
+    parser.add_argument("--variants", nargs="+", choices=["baseline", "event", "always"], default=["event"])
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--max-tools", type=int, default=8)
     parser.add_argument("--max-steps", type=int, default=12)
@@ -77,11 +81,13 @@ def main():
     try:
         if not 1 <= args.repeat <= 20 or not 1 <= args.max_model_calls <= 1000:
             raise ValueError("Invalid repeat count or model-call budget")
+        if len(args.variants) != len(set(args.variants)):
+            raise ValueError("Duplicate variants")
         budget = Budget(tool_calls=args.max_tools, steps=args.max_steps)
         cases = prepare_cases(args.manifest, args.cases)
     except (ValueError, OSError, KeyError) as exc:
         parser.error(f"Invalid batch inputs ({type(exc).__name__})")
-    count = len(cases) * args.repeat
+    count = len(cases) * args.repeat * len(args.variants)
     print(f"{count} runs; each <= {budget.tool_calls} tools, {args.max_model_calls} model requests.")
     if not args.execute:
         print("Dry run: no API calls. Add --execute to start.")
@@ -97,35 +103,41 @@ def main():
         (batch / "plans" / f"{case['id']}.json").write_text(
             json.dumps(case["plan_data"], ensure_ascii=False, indent=2), encoding="utf-8")
     metadata = {"cases": cases, "budget": budget.model_dump(),
-                "max_model_calls": args.max_model_calls, "repeat": args.repeat}
+                "max_model_calls": args.max_model_calls, "repeat": args.repeat, "variants": args.variants,
+                "model_config": {name: os.environ.get(name) for name in (
+                    "ADRA_MODEL", "ADRA_PLANNING_MODEL", "ADRA_WRITING_MODEL", "ADRA_COVERAGE_MODEL",
+                    "ADRA_REFLECTION_MODEL", "ADRA_VERIFICATION_MODEL")}}
     (batch / "manifest.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2),
                                          encoding="utf-8")
     records = []
     for repeat in range(args.repeat):
         # Each report is evaluated after generation; no second research run for scoring.
-        modes = ("semantic",)
+        variants = args.variants[repeat % len(args.variants):] + args.variants[:repeat % len(args.variants)]
         for case in cases:
-            for mode in modes:
-                output = batch / case["id"] / mode / str(repeat + 1)
+            for variant in variants:
+                mode = "semantic"
+                output = batch / case["id"] / variant / str(repeat + 1)
                 command = build_command(case, mode, batch / "plans" / f"{case['id']}.json",
-                                        output, budget, args.max_model_calls)
+                                        output, budget, args.max_model_calls, variant)
                 try:
                     process = subprocess.run(command, check=False)
                     record = collect_result(output, process.returncode)
                 except OSError as exc:
                     record = {"status": "failed", "error_type": type(exc).__name__}
-                record.update(case=case["id"], mode=mode, repeat=repeat + 1)
+                record.update(case=case["id"], mode=mode, variant=variant, repeat=repeat + 1)
                 records.append(record)
                 (batch / "summary.json").write_text(
                     json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+    (batch / "aggregate.json").write_text(
+        json.dumps(aggregate(records), ensure_ascii=False, indent=2), encoding="utf-8")
     review = ["# 人工复核表", "", "请依据同一标准独立核验报告，不直接复制模型覆盖评分。",
-              "", "| Case | Mode | Repeat | Criterion | 人工结论 | 引文支持与备注 |",
+              "", "| Case | Variant | Repeat | Criterion | 人工结论 | 引文支持与备注 |",
               "| --- | --- | --- | --- | --- | --- |"]
     for record in records:
         case = next(c for c in cases if c["id"] == record["case"])
         for task in case["plan_data"]["tasks"]:
             for criterion in task["criteria"]:
-                review.append(f"| {case['id']} | {record['mode']} | {record['repeat']} | "
+                review.append(f"| {case['id']} | {record['variant']} | {record['repeat']} | "
                               f"{task['id']}/{criterion['id']} | 待核验 | |")
     (batch / "review.md").write_text("\n".join(review) + "\n", encoding="utf-8")
     print(f"Batch artifacts: {batch}")

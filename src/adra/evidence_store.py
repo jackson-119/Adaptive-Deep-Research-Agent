@@ -5,9 +5,9 @@ character offsets and a digest so quotations can be checked against raw text.
 """
 import hashlib
 import math
+import re
 from collections import Counter
 
-from adra.passages import terms
 from adra.state import Evidence
 from adra.tools import canonical_url
 
@@ -35,13 +35,53 @@ def add_source(evidence, documents, result, task_id=None, read=False):
     return source['id']
 
 
-def retrieve(evidence, documents, queries, char_budget=12000, top_k=4):
-    """Fairly allocate chunks across queries, not discovery tasks or source counts.
+def tokenize(text):
+    """Preserve occurrences: ASCII words/API identifiers and overlapping CJK bigrams."""
+    tokens = re.findall(r"[a-z0-9_]+", text.lower())
+    for span in re.findall(r"[\u4e00-\u9fff]+", text):
+        tokens.extend(span[i:i + 2] for i in range(max(1, len(span) - 1)))
+    return tokens
 
-    Overlapping spans retain surrounding context. BM25 here uses
-    token sets from the project's bilingual tokenizer (binary term frequency).
-    No embedding service is required; relevance is not a support judgment.
+
+def bm25_scores(corpus, query, k1=1.2, b=0.75):
+    """Okapi TF saturation/length normalization with Lucene's positive IDF.
+
+    Corpus entries and query are token sequences; document length counts tokens,
+    not distinct terms. Query terms are deduplicated (no query-TF weighting).
     """
+    if not corpus:
+        return []
+    counts = [Counter(tokens) for tokens in corpus]
+    df = Counter(word for count in counts for word in count)
+    avgdl = sum(map(len, corpus)) / len(corpus)
+    scores = []
+    for tokens, count in zip(corpus, counts):
+        value = 0.0
+        for word in set(query):
+            tf = count[word]
+            if not tf:
+                continue
+            idf = math.log(1 + (len(corpus) - df[word] + 0.5) / (df[word] + 0.5))
+            value += idf * tf * (k1 + 1) / (
+                tf + k1 * (1 - b + b * len(tokens) / max(avgdl, 1)))
+        scores.append(value)
+    return scores
+
+
+def merge_spans(spans):
+    merged = []
+    for start, end in sorted(spans):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(end, merged[-1][1]))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def retrieve(evidence, documents, queries, char_budget=12000, top_k=4):
+    """Round-robin query allocation, merging overlapping relevant spans before charging space."""
+    if char_budget < 0 or top_k < 1:
+        raise ValueError('Invalid retrieval budget')
     candidates = []
     for source in evidence:
         raw = documents.get(source['id'], {}).get('read')
@@ -49,48 +89,37 @@ def retrieve(evidence, documents, queries, char_budget=12000, top_k=4):
             continue
         if hashlib.sha256(raw.encode()).hexdigest() != source['raw_sha256']:
             raise ValueError('Stored document digest mismatch')
-        # Include surrounding paragraphs instead of discarding context at blank lines.
         for start in range(0, len(raw), 900):
             end = min(len(raw), start + 1200)
-            chunk = raw[start:end]
-            candidates.append((source, start, end, chunk, terms(chunk)))
+            candidates.append((source, start, end, tokenize(raw[start:end])))
     if not candidates:
         return []
-    df = Counter(word for *_, words in candidates for word in words)
-    avg_len = sum(len(c[-1]) for c in candidates) / len(candidates)
     rankings = []
     for query in queries:
-        query_terms = terms(query)
-        def score(candidate):
-            words = candidate[-1]
-            length_norm = 1 + 1.2 * (0.25 + 0.75 * len(words) / max(1, avg_len))
-            return sum(math.log(1 + (len(candidates) - df[w] + 0.5) / (df[w] + 0.5))
-                       * 2.2 / length_norm for w in words & query_terms)
-        ranked = sorted(enumerate(candidates), key=lambda pair: (-score(pair[1]), pair[0]))
-        rankings.append([i for i, c in ranked if score(c) > 0][:top_k])
-    selected, used = [], 0
+        scores = bm25_scores([c[-1] for c in candidates], tokenize(query))
+        ranked = sorted(range(len(candidates)), key=lambda i: (-scores[i], i))
+        rankings.append([i for i in ranked if scores[i] > 0][:top_k])
+    selected = {}
     for rank in range(top_k):
         for ranking in rankings:
             if rank >= len(ranking):
                 continue
-            index = ranking[rank]
-            source, start, end, text, _ = candidates[index]
-            if index in selected or used + len(text) + 2 > char_budget:
-                continue
-            if any(candidates[i][0]['id'] == source['id'] and
-                   start < candidates[i][2] and candidates[i][1] < end for i in selected):
-                continue
-            selected.append(index)
-            used += len(text) + 2
-    output = {}
-    for i in selected:
-        source, start, end, text, _ = candidates[i]
-        item = output.setdefault(source['id'], {**source, 'content': '', 'passages': [],
-                                               'selection_method': 'global_bm25_v1'})
-        item['passages'].append({'start': start, 'end': end, 'text': text})
-    for item in output.values():
-        item['passages'].sort(key=lambda p: p['start'])
-        item['content'] = '\n\n'.join(p['text'] for p in item['passages'])
-        item['selected_length'] = len(item['content'])
-        item['truncated'] = sum(p['end'] - p['start'] for p in item['passages']) < item['original_length']
-    return list(output.values())
+            source, start, end, _ = candidates[ranking[rank]]
+            trial = {**selected, source['id']: merge_spans(
+                [*selected.get(source['id'], []), (start, end)])}
+            size = sum(sum(end - start for start, end in spans) + 2 * (len(spans) - 1)
+                       for spans in trial.values())
+            if size <= char_budget:
+                selected = trial
+    output = []
+    for source in evidence:
+        spans = selected.get(source['id'])
+        if not spans:
+            continue
+        raw = documents[source['id']]['read']
+        passages = [{'start': start, 'end': end, 'text': raw[start:end]} for start, end in spans]
+        content = '\n\n'.join(p['text'] for p in passages)
+        output.append({**source, 'content': content, 'passages': passages,
+                       'selection_method': 'bm25_tf_v2', 'selected_length': len(content),
+                       'truncated': sum(end - start for start, end in spans) < len(raw)})
+    return output

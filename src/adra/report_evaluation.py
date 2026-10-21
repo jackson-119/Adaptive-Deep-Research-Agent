@@ -6,6 +6,7 @@ from pathlib import Path
 from adra.configuration import RuntimeConfig
 from adra.graph import evaluate_report
 from adra.planning import Plan
+from adra.verification import verify_report
 
 
 def main():
@@ -13,6 +14,7 @@ def main():
     parser.add_argument('--run', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True, help='New evaluation JSON file')
     parser.add_argument('--max-model-calls', type=int, default=8)
+    parser.add_argument('--verify-claims', action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
     if args.output.exists():
         parser.error('Output already exists; choose a new file')
@@ -24,7 +26,8 @@ def main():
     policy = config.create_policy()
     # Never reuse judgments from a previous model or rubric run.
     result = evaluate_report({**saved, 'coverage': {}}, plan, policy)
-    artifact = {'source_run': str(args.run.resolve()), 'target': 'final_report',
+    verification = verify_report(saved, policy) if args.verify_claims else {'status': 'not_requested'}
+    artifact = {'claim_verification': verification, 'source_run': str(args.run.resolve()), 'target': 'final_report',
                 'status': result['evaluation_status'], 'coverage': result['coverage'],
                 'runtime_config': config.model_dump(), 'model_call_records': policy.call_records,
                 'total_tokens': policy.tokens, 'token_usage_complete': policy.usage_complete}

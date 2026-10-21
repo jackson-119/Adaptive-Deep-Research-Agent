@@ -12,6 +12,7 @@ from adra.state import Budget
 from adra.tools import TavilyTools
 from adra.domains import DomainPolicy
 from adra.provenance import runtime_provenance
+from adra.research_control import ResearchOptions
 
 
 def save(result: dict, directory: Path) -> None:
@@ -20,7 +21,14 @@ def save(result: dict, directory: Path) -> None:
     for claim in result["report"]["claims"]:
         refs = " ".join(f"[{i}]" for i in claim["evidence_ids"])
         report.extend([f"{claim['text']} {refs}", ""])
-    report.extend(["## 局限性", *result["report"]["limitations"], "", "## 来源"])
+    report.extend(["## 局限性", *result["report"]["limitations"], ""])
+    verification = result.get("claim_verification", {})
+    if verification.get("status") not in (None, "not_requested"):
+        report.extend(["## 声明核验", "模型核验并非人工事实认证；原报告未自动改写。", ""])
+        for record in verification.get("claims", []):
+            report.append(f"- 声明 {record['claim_index'] + 1}: {record['verdict'] or '未完成'}")
+        report.append("")
+    report.append("## 来源")
     for e in result["evidence"]:
         report.append(f"- [{e['id']}] {e['title']}: {e['url']}")
     (directory / "report.md").write_text("\n".join(report) + "\n", encoding="utf-8")
@@ -29,6 +37,13 @@ def save(result: dict, directory: Path) -> None:
     (directory / "trajectory.jsonl").write_text(
         "".join(json.dumps(t, ensure_ascii=False) + "\n" for t in result["transitions"]),
         encoding="utf-8")
+    for key in ("claim_verification", "goals", "reflections"):
+        if key in result:
+            (directory / f"{key}.json").write_text(
+                json.dumps(result[key], ensure_ascii=False, indent=2), encoding="utf-8")
+    if "decisions" in result:
+        (directory / "decisions.jsonl").write_text(
+            "".join(json.dumps(d, ensure_ascii=False) + "\n" for d in result["decisions"]), encoding="utf-8")
     if "plan" in result:
         (directory / "plan.json").write_text(
             json.dumps(result["plan"], ensure_ascii=False, indent=2), encoding="utf-8")
@@ -53,6 +68,10 @@ def main():
     parser.add_argument("--max-tools", type=int, default=6)
     parser.add_argument("--max-steps", type=int, default=10)
     parser.add_argument("--max-model-calls", type=int, default=32)
+    parser.add_argument("--reflection-mode", choices=["off", "event", "always"], default="event")
+    parser.add_argument("--max-reflections", type=int, default=3)
+    parser.add_argument("--history-window", type=int, default=6)
+    parser.add_argument("--verify-claims", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--output", type=Path, default=Path("outputs"))
     parser.add_argument("--allowed-domain", action="append", default=[],
                         help="Allowed exact source hostname; repeat for multiple hosts")
@@ -76,6 +95,8 @@ def main():
     directory = args.output / run_id
     try:
         budget = Budget(tool_calls=args.max_tools, steps=args.max_steps)
+        options = ResearchOptions(reflection_mode=args.reflection_mode, max_reflections=args.max_reflections,
+                                  history_window=args.history_window, verify_claims=args.verify_claims)
         if args.snapshot or args.coverage_replay:
             parser.error("Historical snapshots use python -m adra.evaluation; the research CLI is live")
         plan = Plan.model_validate_json(args.plan.read_text(encoding="utf-8")) if args.plan else None
@@ -96,7 +117,7 @@ def main():
         if query.strip() != plan.query.strip():
             parser.error("Plan query must match the research query")
         result = run(query, policy, tools, budget, task_id=run_id, allowed_domains=allowed_domains,
-                     plan=plan, evaluate=args.coverage_mode == "semantic")
+                     plan=plan, evaluate=args.coverage_mode == "semantic", options=options)
         result["mode"] = mode
         result["strategy"] = args.strategy
         result["model"] = os.environ.get("ADRA_MODEL") if mode == "live" else None

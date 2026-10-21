@@ -9,6 +9,7 @@ class ResearchDecision(BaseModel):
     argument: str = Field(default='', max_length=2000)
     focus: str = Field(default='', max_length=2000)
     reason: str = Field(min_length=1, max_length=2000)
+    suspected_conflict: bool = False
 
     @model_validator(mode='after')
     def check_argument(self):
