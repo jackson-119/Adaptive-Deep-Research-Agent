@@ -65,3 +65,54 @@ def test_handoff_preserves_whole_discovered_passage():
     assert notes[0]['content'] == raw
     stale = {**earlier, 'raw_sha256': 'stale'}
     assert handoff_evidence(state['evidence'], state['raw_documents'], [[stale]]) == []
+
+
+def test_quote_failure_records_safe_reason():
+    class Judge:
+        def verify_claim(self, claim, evidence):
+            return ClaimVerdict(verdict='supported', explanation='example', citations=[])
+    result = verify_report(claim_state(), Judge())
+    record = result['claims'][0]
+    assert result['status'] == 'incomplete'
+    assert record['error_reason'] == 'missing_required_quote'
+    assert all(a['error_reason'] == 'missing_required_quote' for a in record['attempts'])
+
+
+def test_absent_quote_has_distinct_reason():
+    class Judge:
+        def verify_claim(self, claim, evidence):
+            return ClaimVerdict(verdict='supported', explanation='example', citations=[
+                {'evidence_id': evidence[0]['id'], 'quote': 'fabricated quote not in original'}])
+    result = verify_report(claim_state(), Judge())
+    assert result['claims'][0]['error_reason'] == 'quote_not_in_selected_passages'
+
+
+def test_quote_retry_receives_feedback_without_changing_verdict_rules():
+    class Judge:
+        def verify_claim(self, claim, evidence):
+            self.first_evidence = evidence
+            return ClaimVerdict(verdict='supported', explanation='example', citations=[
+                {'evidence_id': evidence[0]['id'], 'quote': 'not an original quote'}])
+        def repair_claim_verification(self, claim, evidence, reason):
+            assert reason == 'quote_not_in_selected_passages'
+            assert evidence == self.first_evidence
+            return ClaimVerdict(verdict='supported', explanation='exact source', citations=[
+                {'evidence_id': evidence[0]['id'], 'quote': evidence[0]['passages'][0]['text']}])
+    result = verify_report(claim_state(), Judge())
+    record = result['claims'][0]
+    assert result['status'] == 'completed'
+    assert record['attempts'][0]['error_reason'] == 'quote_not_in_selected_passages'
+    assert record['attempts'][1]['status'] == 'ok'
+    assert 'error_reason' not in record
+
+
+def test_repair_may_reassess_as_insufficient():
+    class Judge:
+        def verify_claim(self, claim, evidence):
+            return ClaimVerdict(verdict='supported', explanation='example', citations=[])
+        def repair_claim_verification(self, claim, evidence, reason):
+            assert reason == 'missing_required_quote'
+            return ClaimVerdict(verdict='insufficient', explanation='Not established by passages.')
+    result = verify_report(claim_state(), Judge())
+    assert result['status'] == 'completed'
+    assert result['insufficient_claim_rate'] == 1

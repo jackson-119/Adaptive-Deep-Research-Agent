@@ -12,6 +12,14 @@ from adra.coverage import Citation
 from adra.evaluation_retry import retryable
 from adra.evidence_store import retrieve
 
+# Only constant local validation messages may enter artifacts; never log provider text.
+QUOTE_ERROR_REASONS = {
+    'Source digest mismatch': 'source_digest_mismatch',
+    'Passage does not match raw text': 'passage_raw_mismatch',
+    'Quote absent from supplied passages': 'quote_not_in_selected_passages',
+    'Supported/contradicted verdict needs a source quote': 'missing_required_quote',
+}
+
 
 class ClaimVerdict(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -47,6 +55,7 @@ def verify_report(state, policy, max_attempts=2):
     for index, claim in enumerate(state['report']['claims']):
         record = {'claim_index': index, 'claim': claim, 'verdict': None, 'citations': []}
         attempts = []
+        feedback = None
         for attempt in range(1, max_attempts + 1):
             stage = 'evidence_selection'
             try:
@@ -72,19 +81,31 @@ def verify_report(state, policy, max_attempts=2):
                     verdict = ClaimVerdict(verdict='insufficient', explanation='No retrieved read evidence in cited sources.')
                 else:
                     stage = 'model_request'
-                    verdict = ClaimVerdict.model_validate(policy.verify_claim(claim, evidence))
+                    if feedback and hasattr(policy, 'repair_claim_verification'):
+                        response = policy.repair_claim_verification(claim, evidence, feedback)
+                    else:
+                        response = policy.verify_claim(claim, evidence)
+                    verdict = ClaimVerdict.model_validate(response)
                 stage = 'quote_validation'
                 if verdict.verdict in ('supported', 'contradicted') and not verdict.citations:
                     raise ValueError('Supported/contradicted verdict needs a source quote')
                 citations = validate_quotes(verdict.citations, evidence, state['raw_documents'])
                 record.pop('error_type', None)
+                record.pop('error_reason', None)
                 record.update(verdict=verdict.verdict, explanation=verdict.explanation,
                               citations=citations, validation='quotes_validated_model_judgment')
                 attempts.append({'attempt': attempt, 'status': 'ok'})
                 break
             except Exception as exc:
+                feedback = None
                 record.update(validation='assessment_failed', error_type=type(exc).__name__)
                 attempts.append({'attempt': attempt, 'status': 'failed', 'stage': stage, 'error_type': type(exc).__name__})
+                if stage == 'quote_validation':
+                    reason = QUOTE_ERROR_REASONS.get(str(exc), 'unclassified_quote_validation_error')
+                    record['error_reason'] = reason
+                    attempts[-1]['error_reason'] = reason
+                    if reason in ('quote_not_in_selected_passages', 'missing_required_quote'):
+                        feedback = reason
                 if not retryable(exc):
                     break
         record['attempts'] = attempts
