@@ -112,29 +112,28 @@ flowchart TD
 
 ## Experiments & Results — 探索性结果
 
-**任务：** 根据官方文档说明 LangGraph Python 的状态管理与条件路由机制。使用固定简报、DeepSeek Chat、相同来源范围及预算：8 次外部请求、12 步研究行动、32 次模型调用。每组仅运行一次，模型版本以当时供应商别名为准。
+最新批次：**2026-11-05，三任务、每组重复三次**。
 
-| 指标 | Baseline（关闭反思） | Event（事件反思） |
-| --- | ---: | ---: |
-| Research Steps | 6 | 12 |
-| External Requests | 3 | 3 |
-| Read Sources | 11 | 10 |
-| Reflection Calls / Failures | 0 / 0 | 1 / 0 |
-| Model Calls | 21 | 31 |
-| Total Tokens | 83,875 | 163,493 |
-| Latency | 71.9 s | 117.6 s |
-| Semantic Coverage | 50.0% | 50.0% |
-| Supported Claim Rate | 81.8%（9/11） | 93.3%（14/15） |
-| Evaluation / Claim Check | completed / completed | completed / completed |
-| Stop Reason | researcher_complete | step_budget |
+批次 `live-eval-20261105T141942Z-1a3642b0`，Baseline 关闭反思，Event 使用事件触发反思。固定简报；命令预算为每次最多 8 次外部请求、12 步、48 次模型调用。共 18 次运行，全部成功；覆盖评估和声明核验各 17/18 完成，同时完成两项评分的为 16/18。
 
-来源是用户提供的 2026-10-21 云端运行，代码提交 `8a21af2`。运行 ID、模型配置、精确指标与评分版本见 [结果元数据](docs/results-20261021.json)；该文件是摘录，不含完整原文和运行轨迹，不应视为完整可离线重放的数据集。
+| 任务 | 组别 | 覆盖率均值 ± 样本标准差 | 声明支持率均值 ± 样本标准差 | 平均 Token | 平均耗时 | 平均外部请求 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| langgraph-state-routing | baseline | 55.6% ± 9.6 pp (n=3) | 91.4% ± 8.3 pp (n=3) | 126,888 | 488.3 s | 2.33 |
+| langgraph-state-routing | event | 50.0% ± 16.7 pp (n=3) | 95.2% ± 4.2 pp (n=3) | 164,813 | 399.3 s | 2.33 |
+| python-asyncio | baseline | 58.3% ± 14.4 pp (n=3) | 93.3% ± 5.8 pp (n=3) | 82,522 | 63.2 s | 1.67 |
+| python-asyncio | event | 50.0% ± 0.0 pp (n=3) | 78.9% ± 3.5 pp (n=3) | 167,403 | 115.2 s | 2.33 |
+| pydantic-validation | baseline | 37.5% ± 17.7 pp (n=2) | 100.0% ± 0.0 pp (n=3) | 75,742 | 65.8 s | 2.00 |
+| pydantic-validation | event | 66.7% ± 38.2 pp (n=3) | 93.8% ± 8.8 pp (n=2) | 151,676 | 91.2 s | 2.33 |
 
-**能够观察到：** Event 在本次运行中 Token 增加约 94.9%、耗时增加约 63.5%，覆盖率相同。两组评估均第一次成功，未实际触发失败重试。
+支持率是每次报告支持率的算术平均，不能解释为所有声明合并后的准确率。各项默认 n=3；Pydantic Baseline 覆盖率与 Event 支持率只有 n=2，缺失未补零。这两项均值并非完整的重复配对比较。
 
-**不能据此得出：** Event 整体质量更高。两组声明数和内容不同；样本只有一次；已发现评估重新检索可能遗漏写作证据，影响低分解释。实现完成与算法有效是不同结论。
+**观察：** Event 的平均 Token 在 LangGraph、asyncio、Pydantic 分别增加 29.9%、102.9%、100.3%；覆盖率分别变化 −5.6、−8.3、+29.2 个百分点，后者含缺失样本。声明支持率分别变化 +3.8、−14.4、−6.2 个百分点，最后一项含缺失样本。当前数据没有显示事件反思的跨任务一致收益。
 
-早期批次的 Baseline 评分未完成，其空值不能当作零分，也不能与本表合并。历史记录、最新轨迹案例和评分偏差说明见 [实验记录](docs/results.md)。
+耗时变化分别为 −18.2%、+82.4%、+38.5%；LangGraph 的 Event 耗时标准差约 172.5 s，仅凭这三次不能认定其更快。批次总 Token 为 2,307,135；它不含独立预检和重评成本，也不是货币账单。
+
+未完成项均来自 Pydantic 第三次运行：Baseline 覆盖评估未完成，Event 声明核验未完成。实际模型配置、代码提交和人工复核尚待取得服务器原始产物核验。实时搜索未冻结，存在评分选段遗漏局限；当前不作统计显著性或算法优越性结论。
+
+精确均值、标准差、缺失数与描述性区间见 [结果元数据](docs/results-20261105.json)，方法、失败记录和历史结果见 [实验记录](docs/results.md)。新旧批次不混算。
 
 <a id="quick-start"></a>
 

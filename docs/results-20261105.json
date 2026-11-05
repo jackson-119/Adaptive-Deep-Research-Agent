@@ -1,0 +1,642 @@
+{
+  "batch": "live-eval-20261105T141942Z-1a3642b0",
+  "date": "2026-11-05",
+  "source": "user-provided server aggregate and incomplete-run diagnostics",
+  "source_note": "Pasted aggregate omitted its closing object brace; restored JSON syntax only.",
+  "protocol": {
+    "cases": 3,
+    "variants": [
+      "baseline",
+      "event"
+    ],
+    "repeat": 3,
+    "max_tools": 8,
+    "max_steps": 12,
+    "max_model_calls": 48,
+    "note": "Budgets from user-executed command; Git/model provenance and complete per-run artifacts have not been supplied."
+  },
+  "incomplete_runs": [
+    {
+      "case": "pydantic-validation",
+      "variant": "baseline",
+      "repeat": 3,
+      "coverage_status": "incomplete",
+      "verification_status": "completed",
+      "model_calls": 19
+    },
+    {
+      "case": "pydantic-validation",
+      "variant": "event",
+      "repeat": 3,
+      "coverage_status": "completed",
+      "verification_status": "incomplete",
+      "model_calls": 32
+    }
+  ],
+  "aggregate": {
+    "groups": [
+      {
+        "case": "langgraph-state-routing",
+        "variant": "baseline",
+        "runs": 3,
+        "failed_runs": 0,
+        "incomplete_evaluations": 0,
+        "incomplete_claim_checks": 0,
+        "metrics": {
+          "semantic_coverage": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.5555555555555556,
+            "sample_std": 0.0962250448649376,
+            "bootstrap_95_ci": [
+              0.5,
+              0.6666666666666666
+            ]
+          },
+          "supported_claim_rate": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.9141414141414141,
+            "sample_std": 0.08344803859524395,
+            "bootstrap_95_ci": [
+              0.8333333333333334,
+              1.0
+            ]
+          },
+          "contradicted_claim_rate": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.0,
+            "sample_std": 0.0,
+            "bootstrap_95_ci": [
+              0.0,
+              0.0
+            ]
+          },
+          "insufficient_claim_rate": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.08585858585858586,
+            "sample_std": 0.08344803859524397,
+            "bootstrap_95_ci": [
+              0.0,
+              0.16666666666666666
+            ]
+          },
+          "total_tokens": {
+            "n": 3,
+            "missing": 0,
+            "mean": 126888.33333333333,
+            "sample_std": 4550.149155064407,
+            "bootstrap_95_ci": [
+              121697,
+              130185
+            ]
+          },
+          "tool_requests_sent": {
+            "n": 3,
+            "missing": 0,
+            "mean": 2.3333333333333335,
+            "sample_std": 0.5773502691896257,
+            "bootstrap_95_ci": [
+              2,
+              3
+            ]
+          },
+          "latency_seconds": {
+            "n": 3,
+            "missing": 0,
+            "mean": 488.2713927465181,
+            "sample_std": 48.89844131473321,
+            "bootstrap_95_ci": [
+              432.1092954999767,
+              521.3944337996654
+            ]
+          },
+          "tool_rejections": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.6666666666666666,
+            "sample_std": 0.5773502691896257,
+            "bootstrap_95_ci": [
+              0,
+              1
+            ]
+          },
+          "reflection_calls": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0,
+            "sample_std": 0.0,
+            "bootstrap_95_ci": [
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "case": "langgraph-state-routing",
+        "variant": "event",
+        "runs": 3,
+        "failed_runs": 0,
+        "incomplete_evaluations": 0,
+        "incomplete_claim_checks": 0,
+        "metrics": {
+          "semantic_coverage": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.5,
+            "sample_std": 0.16666666666666666,
+            "bootstrap_95_ci": [
+              0.3333333333333333,
+              0.6666666666666666
+            ]
+          },
+          "supported_claim_rate": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.9521367521367522,
+            "sample_std": 0.04176680930895935,
+            "bootstrap_95_ci": [
+              0.9230769230769231,
+              1.0
+            ]
+          },
+          "contradicted_claim_rate": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.0,
+            "sample_std": 0.0,
+            "bootstrap_95_ci": [
+              0.0,
+              0.0
+            ]
+          },
+          "insufficient_claim_rate": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.04786324786324787,
+            "sample_std": 0.041766809308959374,
+            "bootstrap_95_ci": [
+              0.0,
+              0.07692307692307693
+            ]
+          },
+          "total_tokens": {
+            "n": 3,
+            "missing": 0,
+            "mean": 164812.66666666666,
+            "sample_std": 5321.084883116725,
+            "bootstrap_95_ci": [
+              159975,
+              170512
+            ]
+          },
+          "tool_requests_sent": {
+            "n": 3,
+            "missing": 0,
+            "mean": 2.3333333333333335,
+            "sample_std": 1.1547005383792515,
+            "bootstrap_95_ci": [
+              1,
+              3
+            ]
+          },
+          "latency_seconds": {
+            "n": 3,
+            "missing": 0,
+            "mean": 399.3312555666392,
+            "sample_std": 172.47523062250295,
+            "bootstrap_95_ci": [
+              258.4628504901193,
+              591.6866396800615
+            ]
+          },
+          "tool_rejections": {
+            "n": 3,
+            "missing": 0,
+            "mean": 1,
+            "sample_std": 0.0,
+            "bootstrap_95_ci": [
+              1,
+              1
+            ]
+          },
+          "reflection_calls": {
+            "n": 3,
+            "missing": 0,
+            "mean": 2,
+            "sample_std": 1.0,
+            "bootstrap_95_ci": [
+              1,
+              3
+            ]
+          }
+        }
+      },
+      {
+        "case": "pydantic-validation",
+        "variant": "baseline",
+        "runs": 3,
+        "failed_runs": 0,
+        "incomplete_evaluations": 1,
+        "incomplete_claim_checks": 0,
+        "metrics": {
+          "semantic_coverage": {
+            "n": 2,
+            "missing": 1,
+            "mean": 0.375,
+            "sample_std": 0.1767766952966369,
+            "bootstrap_95_ci": [
+              0.25,
+              0.5
+            ]
+          },
+          "supported_claim_rate": {
+            "n": 3,
+            "missing": 0,
+            "mean": 1.0,
+            "sample_std": 0.0,
+            "bootstrap_95_ci": [
+              1.0,
+              1.0
+            ]
+          },
+          "contradicted_claim_rate": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.0,
+            "sample_std": 0.0,
+            "bootstrap_95_ci": [
+              0.0,
+              0.0
+            ]
+          },
+          "insufficient_claim_rate": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.0,
+            "sample_std": 0.0,
+            "bootstrap_95_ci": [
+              0.0,
+              0.0
+            ]
+          },
+          "total_tokens": {
+            "n": 3,
+            "missing": 0,
+            "mean": 75742.33333333333,
+            "sample_std": 13615.030162777213,
+            "bootstrap_95_ci": [
+              66628,
+              91393
+            ]
+          },
+          "tool_requests_sent": {
+            "n": 3,
+            "missing": 0,
+            "mean": 2,
+            "sample_std": 0.0,
+            "bootstrap_95_ci": [
+              2,
+              2
+            ]
+          },
+          "latency_seconds": {
+            "n": 3,
+            "missing": 0,
+            "mean": 65.8117819367908,
+            "sample_std": 9.591952242504341,
+            "bootstrap_95_ci": [
+              57.580345060210675,
+              76.34529852028936
+            ]
+          },
+          "tool_rejections": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0,
+            "sample_std": 0.0,
+            "bootstrap_95_ci": [
+              0,
+              0
+            ]
+          },
+          "reflection_calls": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0,
+            "sample_std": 0.0,
+            "bootstrap_95_ci": [
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "case": "pydantic-validation",
+        "variant": "event",
+        "runs": 3,
+        "failed_runs": 0,
+        "incomplete_evaluations": 0,
+        "incomplete_claim_checks": 1,
+        "metrics": {
+          "semantic_coverage": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.6666666666666666,
+            "sample_std": 0.3818813079129867,
+            "bootstrap_95_ci": [
+              0.25,
+              1.0
+            ]
+          },
+          "supported_claim_rate": {
+            "n": 2,
+            "missing": 1,
+            "mean": 0.9375,
+            "sample_std": 0.08838834764831845,
+            "bootstrap_95_ci": [
+              0.875,
+              1.0
+            ]
+          },
+          "contradicted_claim_rate": {
+            "n": 2,
+            "missing": 1,
+            "mean": 0.0,
+            "sample_std": 0.0,
+            "bootstrap_95_ci": [
+              0.0,
+              0.0
+            ]
+          },
+          "insufficient_claim_rate": {
+            "n": 2,
+            "missing": 1,
+            "mean": 0.0625,
+            "sample_std": 0.08838834764831845,
+            "bootstrap_95_ci": [
+              0.0,
+              0.125
+            ]
+          },
+          "total_tokens": {
+            "n": 3,
+            "missing": 0,
+            "mean": 151676,
+            "sample_std": 29937.419728493638,
+            "bootstrap_95_ci": [
+              122866,
+              182626
+            ]
+          },
+          "tool_requests_sent": {
+            "n": 3,
+            "missing": 0,
+            "mean": 2.3333333333333335,
+            "sample_std": 0.5773502691896257,
+            "bootstrap_95_ci": [
+              2,
+              3
+            ]
+          },
+          "latency_seconds": {
+            "n": 3,
+            "missing": 0,
+            "mean": 91.17762677309413,
+            "sample_std": 16.138411338089163,
+            "bootstrap_95_ci": [
+              74.76285647973418,
+              107.02469827979803
+            ]
+          },
+          "tool_rejections": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.3333333333333333,
+            "sample_std": 0.5773502691896257,
+            "bootstrap_95_ci": [
+              0,
+              1
+            ]
+          },
+          "reflection_calls": {
+            "n": 3,
+            "missing": 0,
+            "mean": 2.6666666666666665,
+            "sample_std": 0.5773502691896257,
+            "bootstrap_95_ci": [
+              2,
+              3
+            ]
+          }
+        }
+      },
+      {
+        "case": "python-asyncio",
+        "variant": "baseline",
+        "runs": 3,
+        "failed_runs": 0,
+        "incomplete_evaluations": 0,
+        "incomplete_claim_checks": 0,
+        "metrics": {
+          "semantic_coverage": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.5833333333333334,
+            "sample_std": 0.14433756729740643,
+            "bootstrap_95_ci": [
+              0.5,
+              0.75
+            ]
+          },
+          "supported_claim_rate": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.9333333333333333,
+            "sample_std": 0.05773502691896256,
+            "bootstrap_95_ci": [
+              0.9,
+              1.0
+            ]
+          },
+          "contradicted_claim_rate": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.0,
+            "sample_std": 0.0,
+            "bootstrap_95_ci": [
+              0.0,
+              0.0
+            ]
+          },
+          "insufficient_claim_rate": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.06666666666666667,
+            "sample_std": 0.05773502691896258,
+            "bootstrap_95_ci": [
+              0.0,
+              0.1
+            ]
+          },
+          "total_tokens": {
+            "n": 3,
+            "missing": 0,
+            "mean": 82522.33333333333,
+            "sample_std": 14356.680547164562,
+            "bootstrap_95_ci": [
+              74232,
+              99100
+            ]
+          },
+          "tool_requests_sent": {
+            "n": 3,
+            "missing": 0,
+            "mean": 1.6666666666666667,
+            "sample_std": 0.5773502691896257,
+            "bootstrap_95_ci": [
+              1,
+              2
+            ]
+          },
+          "latency_seconds": {
+            "n": 3,
+            "missing": 0,
+            "mean": 63.1859457998847,
+            "sample_std": 19.736751184403236,
+            "bootstrap_95_ci": [
+              43.96324979979545,
+              83.39943114016205
+            ]
+          },
+          "tool_rejections": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.3333333333333333,
+            "sample_std": 0.5773502691896257,
+            "bootstrap_95_ci": [
+              0,
+              1
+            ]
+          },
+          "reflection_calls": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0,
+            "sample_std": 0.0,
+            "bootstrap_95_ci": [
+              0,
+              0
+            ]
+          }
+        }
+      },
+      {
+        "case": "python-asyncio",
+        "variant": "event",
+        "runs": 3,
+        "failed_runs": 0,
+        "incomplete_evaluations": 0,
+        "incomplete_claim_checks": 0,
+        "metrics": {
+          "semantic_coverage": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.5,
+            "sample_std": 0.0,
+            "bootstrap_95_ci": [
+              0.5,
+              0.5
+            ]
+          },
+          "supported_claim_rate": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.7893939393939394,
+            "sample_std": 0.035306606659791066,
+            "bootstrap_95_ci": [
+              0.75,
+              0.8181818181818182
+            ]
+          },
+          "contradicted_claim_rate": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.0,
+            "sample_std": 0.0,
+            "bootstrap_95_ci": [
+              0.0,
+              0.0
+            ]
+          },
+          "insufficient_claim_rate": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.2106060606060606,
+            "sample_std": 0.03530660665979104,
+            "bootstrap_95_ci": [
+              0.18181818181818182,
+              0.25
+            ]
+          },
+          "total_tokens": {
+            "n": 3,
+            "missing": 0,
+            "mean": 167403.33333333334,
+            "sample_std": 3516.0485396725303,
+            "bootstrap_95_ci": [
+              163382,
+              169898
+            ]
+          },
+          "tool_requests_sent": {
+            "n": 3,
+            "missing": 0,
+            "mean": 2.3333333333333335,
+            "sample_std": 0.5773502691896257,
+            "bootstrap_95_ci": [
+              2,
+              3
+            ]
+          },
+          "latency_seconds": {
+            "n": 3,
+            "missing": 0,
+            "mean": 115.24512819992378,
+            "sample_std": 29.490611485303756,
+            "bootstrap_95_ci": [
+              92.70458299992606,
+              148.62058191979304
+            ]
+          },
+          "tool_rejections": {
+            "n": 3,
+            "missing": 0,
+            "mean": 0.6666666666666666,
+            "sample_std": 1.1547005383792515,
+            "bootstrap_95_ci": [
+              0,
+              2
+            ]
+          },
+          "reflection_calls": {
+            "n": 3,
+            "missing": 0,
+            "mean": 2.3333333333333335,
+            "sample_std": 0.5773502691896257,
+            "bootstrap_95_ci": [
+              2,
+              3
+            ]
+          }
+        }
+      }
+    ],
+    "method": "within-case/variant descriptive statistics; percentile bootstrap, seed=0, 1000 resamples",
+    "limitations": "Small repeat counts yield unstable intervals. Missing scores and failed runs are reported, not imputed. No causal or significance claim."
+  }
+}
